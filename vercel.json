@@ -1,8 +1,9 @@
-{
+﻿{
   "crons": [
     {
       "path": "/api/cron/daily-agents",
       "schedule": "0 9 * * *"
     }
-  ]
+  ],
+  "buildId": "33a6aa1b-ed7b-4d64-91f6-429334e44786
 }
