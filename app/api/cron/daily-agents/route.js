@@ -1,9 +1,9 @@
-import { runMarketingCycle } from "../../../../agents/marketing.js";
+﻿import { runMarketingCycle } from "../../../../agents/marketing.js";
 import { runAnalyticsCycle } from "../../../../agents/analytics.js";
 import { runFinanceCycle } from "../../../../agents/finance.js";
 import { runCEOCycle } from "../../../../agents/ceo.js";
 import { runTechCycle } from "../../../../agents/tech.js";
-import { logAgentAction, updateAgentStatus } from "../../../../lib/database.js";
+import { logAgentAction, updateAgentStatus } from "../../../../lib/db.js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

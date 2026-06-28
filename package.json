@@ -8,6 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@libsql/client": "^0.17.4",
     "@vercel/blob": "^2.5.0",
     "framer-motion": "^12.42.0",
     "lucide-react": "^1.21.0",

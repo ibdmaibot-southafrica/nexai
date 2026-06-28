@@ -1,4 +1,4 @@
-import { getLogs } from "../../../lib/database.js";
+﻿import { getLogs } from "../../../lib/db.js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

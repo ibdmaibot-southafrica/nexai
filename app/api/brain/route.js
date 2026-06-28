@@ -1,5 +1,5 @@
-import { chat } from "../../../lib/llm.js";
-import { getState, getLogs } from "../../../lib/database.js";
+﻿import { chat } from "../../../lib/llm.js";
+import { getState, getLogs, logAction } from "../../../lib/db.js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,8 +12,8 @@ export async function POST(request) {
       return Response.json({ error: "Message is required" }, { status: 400 });
     }
 
-    const state = getState();
-    const logs = getLogs(10);
+    const state = await getState();
+    const logs = await getLogs(10);
 
     // Build context from real state
     const pipeline = state.pipeline || [];
