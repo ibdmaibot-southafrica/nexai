@@ -1,1071 +1,422 @@
 "use client";
 
-import "./modern.css";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  Brain,
-  Activity,
-  Users,
-  DollarSign,
-  Zap,
-  Send,
-  X,
-  BarChart3,
-  Code2,
-  Megaphone,
-  LineChart,
-  Crown,
-  CheckCircle2,
-  Clock,
-  Loader2,
-  Sparkles,
-  LayoutDashboard,
-  GitBranch,
-  Settings,
-  ArrowUpRight,
-  CircleDot,
-  Wallet,
-  FileText,
-  CreditCard,
-  Target,
-  Rocket,
-  Play,
-  Eye,
-} from "lucide-react";
 
-const AGENTS_CONFIG = [
-  { key: "ceo", name: "CEO Agent", icon: Crown, color: "#7b2ff7", description: "Strategic decisions, goal-setting, and company direction" },
-  { key: "coding", name: "Coding Agent", icon: Code2, color: "#00ff88", description: "Builds new agents from CEO appointments, modifies website" },
-  { key: "marketing", name: "Marketing Agent", icon: Megaphone, color: "#00d4ff", description: "Brand strategy, content, and market positioning" },
-  { key: "tech", name: "Tech Agent", icon: Code2, color: "#00ff88", description: "Product development, engineering, and technical ops" },
-  { key: "product", name: "Product Design Agent", icon: Sparkles, color: "#ff00ff", description: "UI/UX design, product research, and user experience" },
-  { key: "sales", name: "Sales Agent", icon: DollarSign, color: "#ff6600", description: "B2B sales, lead generation, and customer outreach" },
-  { key: "growth", name: "Growth Agent", icon: ArrowUpRight, color: "#00ff88", description: "Growth hacking, viral loops, and referral systems" },
-  { key: "content", name: "Content Agent", icon: Megaphone, color: "#7b2ff7", description: "Blog posts, social media, and SEO content" },
-  { key: "finance", name: "Finance Agent", icon: Wallet, color: "#ffaa00", description: "Financial planning, invoicing, and budget management" },
-  { key: "analytics", name: "Analytics Agent", icon: LineChart, color: "#ff4466", description: "Data analysis, reporting, and performance insights" },
-];
-
-const TABS = [
-  { key: "home", label: "Home", icon: Rocket },
-  { key: "products", label: "Products", icon: Sparkles },
-  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { key: "pipeline", label: "Pipeline", icon: GitBranch },
-  { key: "agents", label: "Agents", icon: Settings },
-  { key: "invoices", label: "Invoices", icon: FileText },
-  { key: "payments", label: "Payments", icon: CreditCard },
-];
-
-const PIPELINE_STAGES = [
-  { name: "Ideation", statuses: ["ideation"], icon: "💡", agent: "Marketing" },
-  { name: "Development", statuses: ["building"], icon: "🔧", agent: "Tech" },
-  { name: "Testing", statuses: ["testing"], icon: "🧪", agent: "Analytics" },
-  { name: "Validation", statuses: ["validated"], icon: "✅", agent: "CEO" },
-  { name: "Launched", statuses: ["launched"], icon: "🚀", agent: "Sales" },
-];
-
-const STATUS_PROGRESS = {
-  ideation: 20,
-  building: 40,
-  built: 50,
-  testing: 60,
-  validated: 80,
-  launched: 100,
-  rejected: 0,
+/* ------------------------------------------------------------------ helpers */
+const C = {
+  bg: "#07070C", panel: "#0F0F18", panel2: "#14141F", line: "rgba(130,140,170,0.12)",
+  ink: "#E8EAF2", muted: "#888EA6", cyan: "#22D3EE", violet: "#8B5CF6",
+  green: "#34D399", amber: "#FBBF24", red: "#FB7185",
 };
+const mono = "var(--mono)";
+const display = "var(--display)";
 
+const money = (n) => "$" + Math.round(Number(n) || 0).toLocaleString();
+const num = (n) => (Number(n) || 0).toLocaleString();
+function timeAgo(ts) {
+  if (!ts) return "—";
+  const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
+  if (s < 0) return "now";
+  if (s < 60) return s + "s";
+  if (s < 3600) return Math.floor(s / 60) + "m";
+  if (s < 86400) return Math.floor(s / 3600) + "h";
+  return Math.floor(s / 86400) + "d";
+}
+const humanize = (x) => (x || "").replace(/[_-]+/g, " ").trim();
+function logTone(action = "") {
+  const a = action.toLowerCase();
+  if (a.includes("error") || a.includes("fail") || a.includes("reject")) return C.red;
+  if (a.includes("sale") || a.includes("paid") || a.includes("fund") || a.includes("merged") || a.includes("launch") || a.includes("purchase")) return C.green;
+  if (a.includes("build") || a.includes("deploy") || a.includes("generat") || a.includes("repair")) return C.cyan;
+  return C.muted;
+}
+const agentColor = (s) => (s === "active" ? C.green : s === "running" ? C.cyan : s === "error" ? C.red : C.muted);
+
+/* ------------------------------------------------------------------ charts */
+function AreaChart({ data, color = C.green, h = 130 }) {
+  const w = 520;
+  const vals = data.map((d) => d.v);
+  const max = Math.max(1, ...vals);
+  const stepX = vals.length > 1 ? w / (vals.length - 1) : w;
+  const pts = vals.map((v, i) => [i * stepX, h - 14 - (v / max) * (h - 28)]);
+  const line = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
+  const area = `${line} L ${w} ${h} L 0 ${h} Z`;
+  const id = "g" + color.replace("#", "");
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} preserveAspectRatio="none" style={{ display: "block" }}>
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.35" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {[0.25, 0.5, 0.75].map((g) => (
+        <line key={g} x1="0" x2={w} y1={h * g} y2={h * g} stroke={C.line} strokeWidth="1" />
+      ))}
+      <path d={area} fill={`url(#${id})`} />
+      <path d={line} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+      {pts.length > 0 && <circle cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r="3.5" fill={color} />}
+    </svg>
+  );
+}
+
+function Sparkline({ vals, color = C.cyan, w = 90, h = 28 }) {
+  if (!vals || vals.length === 0) vals = [0, 0];
+  const max = Math.max(1, ...vals);
+  const stepX = vals.length > 1 ? w / (vals.length - 1) : w;
+  const line = vals.map((v, i) => (i ? "L" : "M") + (i * stepX).toFixed(1) + " " + (h - 2 - (v / max) * (h - 4)).toFixed(1)).join(" ");
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h} preserveAspectRatio="none">
+      <path d={line} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+const FUNNEL = [
+  { key: "ideation", label: "Ideation", color: C.muted },
+  { key: "building", label: "Building", color: C.cyan },
+  { key: "validated", label: "Validated", color: C.violet },
+  { key: "launched", label: "Launched", color: C.green },
+];
+function Funnel({ byStatus }) {
+  const max = Math.max(1, ...FUNNEL.map((s) => byStatus[s.key] || 0));
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {FUNNEL.map((s) => {
+        const v = byStatus[s.key] || 0;
+        return (
+          <div key={s.key} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ width: 78, fontFamily: mono, fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 0.5 }}>{s.label}</span>
+            <div style={{ flex: 1, height: 22, background: "rgba(255,255,255,0.03)", borderRadius: 4, overflow: "hidden" }}>
+              <motion.div initial={{ width: 0 }} animate={{ width: `${(v / max) * 100}%` }} transition={{ duration: 0.7, ease: "easeOut" }}
+                style={{ height: "100%", background: s.color, opacity: 0.85, minWidth: v > 0 ? 6 : 0 }} />
+            </div>
+            <span style={{ width: 28, textAlign: "right", fontFamily: mono, fontSize: 13, color: C.ink }}>{v}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function Bars({ items, color = C.violet }) {
+  const max = Math.max(1, ...items.map((i) => i.v));
+  return (
+    <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: 120, paddingTop: 8 }}>
+      {items.map((it, i) => (
+        <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, minWidth: 0 }}>
+          <motion.div initial={{ height: 0 }} animate={{ height: `${(it.v / max) * 92}px` }} transition={{ delay: i * 0.04, duration: 0.5 }}
+            style={{ width: "100%", maxWidth: 26, borderRadius: "3px 3px 0 0", background: `linear-gradient(180deg, ${color}, ${color}55)` }} title={`${it.label}: ${it.v}`} />
+          <span style={{ fontFamily: mono, fontSize: 9.5, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 44 }}>{it.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* heartbeat — the company's vital sign */
+function Heartbeat({ alive }) {
+  return (
+    <svg viewBox="0 0 120 24" width="120" height="24" aria-hidden>
+      <path d="M0 12 H38 L44 4 L52 20 L58 12 H120" fill="none" stroke={alive ? C.green : C.muted} strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" opacity="0.5" />
+      {alive && (
+        <motion.circle r="2.6" fill={C.green}
+          animate={{ cx: [0, 38, 44, 52, 58, 120], cy: [12, 12, 4, 20, 12, 12] }}
+          transition={{ duration: 2.2, repeat: Infinity, ease: "linear" }} />
+      )}
+    </svg>
+  );
+}
+
+/* ------------------------------------------------------------------ shells */
+function Panel({ title, hint, right, children, style }) {
+  return (
+    <section style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 14, padding: 18, ...style }}>
+      {(title || right) && (
+        <header style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 14, gap: 12 }}>
+          <div>
+            <h2 style={{ margin: 0, fontFamily: display, fontSize: 14, fontWeight: 600, letterSpacing: 0.2, color: C.ink }}>{title}</h2>
+            {hint && <p style={{ margin: "3px 0 0", fontSize: 11, color: C.muted }}>{hint}</p>}
+          </div>
+          {right}
+        </header>
+      )}
+      {children}
+    </section>
+  );
+}
+
+function Vital({ label, value, accent, sub, spark }) {
+  return (
+    <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 14, padding: "16px 18px", position: "relative", overflow: "hidden" }}>
+      <div style={{ position: "absolute", top: 0, left: 0, width: 3, height: "100%", background: accent }} />
+      <div style={{ fontFamily: mono, fontSize: 10.5, letterSpacing: 1, textTransform: "uppercase", color: C.muted }}>{label}</div>
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 8, marginTop: 8 }}>
+        <div style={{ fontFamily: display, fontSize: 30, fontWeight: 700, color: C.ink, lineHeight: 1 }}>{value}</div>
+        {spark && <Sparkline vals={spark} color={accent} />}
+      </div>
+      {sub && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 8 }}>{sub}</div>}
+    </div>
+  );
+}
+
+function StatusPill({ color, label, pulse }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "5px 11px", borderRadius: 20, background: C.panel, border: `1px solid ${C.line}` }}>
+      <span style={{ position: "relative", width: 7, height: 7 }}>
+        <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: color }} />
+        {pulse && <motion.span style={{ position: "absolute", inset: -3, borderRadius: "50%", border: `1px solid ${color}` }} animate={{ scale: [1, 1.9], opacity: [0.7, 0] }} transition={{ duration: 1.6, repeat: Infinity }} />}
+      </span>
+      <span style={{ color: "#B7BCCB" }}>{label}</span>
+    </span>
+  );
+}
+
+function Empty({ text, h = 120 }) {
+  return (
+    <div style={{ height: h, display: "grid", placeItems: "center", textAlign: "center", padding: "0 20px" }}>
+      <p style={{ margin: 0, fontSize: 12.5, color: C.muted, lineHeight: 1.5, maxWidth: 280 }}>{text}</p>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ page */
 export default function Home() {
+  const [a, setA] = useState(null);
+  const [ins, setIns] = useState(null);
   const [status, setStatus] = useState(null);
   const [logs, setLogs] = useState([]);
-  const [activeTab, setActiveTab] = useState("home");
+  const [deploy, setDeploy] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [running, setRunning] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [lastSeen, setLastSeen] = useState(0);
 
-  // Brain modal
-  const [showBrain, setShowBrain] = useState(false);
-  const [brainInput, setBrainInput] = useState("");
-  const [brainMessages, setBrainMessages] = useState([
-    { role: "assistant", content: "Hello! I'm the NexAI Brain. I can help you direct any of our 6 autonomous agents, check company status, or run strategic initiatives. What would you like to do?" },
-  ]);
-  const [isThinking, setIsThinking] = useState(false);
-  const brainEndRef = useRef(null);
+  useEffect(() => { setLastSeen(Number(localStorage.getItem("nexai_last_seen") || 0)); }, []);
 
-  // Contact form
-  const [showContactForm, setShowContactForm] = useState(false);
-  const [contactForm, setContactForm] = useState({ name: "", email: "", company: "", message: "" });
-  const [contactSent, setContactSent] = useState(false);
-
-  // Agent running state — support multiple simultaneous agents
-  const [runningAgents, setRunningAgents] = useState(new Set());
-  const [selectedAgents, setSelectedAgents] = useState(new Set());
-  const [viewingLogs, setViewingLogs] = useState(null);
-  const [agentLogs, setAgentLogs] = useState({});
-  const [invoiceList, setInvoiceList] = useState([]);
-  const [agentActivities, setAgentActivities] = useState({});
-  const [paymentForm, setPaymentForm] = useState({ customer: "", product: "", amount: "" });
-  const [paymentResult, setPaymentResult] = useState(null);
-
-  // --- Data fetching ---
-  const fetchStatus = useCallback(async () => {
+  const fetchSlow = useCallback(async () => {
     try {
-      const res = await fetch("/api/status");
-      const data = await res.json();
-      setStatus(data);
-    } catch (err) {
-      console.error("Failed to fetch status:", err);
-    }
+      const [ar, ir] = await Promise.all([fetch("/api/analytics"), fetch("/api/insights")]);
+      if (ar.ok) setA(await ar.json());
+      if (ir.ok) setIns(await ir.json());
+    } catch {}
   }, []);
-
-  const fetchLogs = useCallback(async () => {
+  const fetchFast = useCallback(async () => {
     try {
-      const res = await fetch("/api/logs?count=30");
-      const data = await res.json();
-      setLogs(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error("Failed to fetch logs:", err);
-    }
+      const [sr, lr, dr] = await Promise.all([
+        fetch("/api/status"),
+        fetch("/api/logs?count=40"),
+        fetch("/api/agents/deploy").catch(() => null),
+      ]);
+      if (sr?.ok) setStatus(await sr.json());
+      if (lr?.ok) { const d = await lr.json(); setLogs(Array.isArray(d) ? d : d.logs || []); }
+      if (dr?.ok) setDeploy(await dr.json());
+    } catch {}
   }, []);
-
-  const fetchInvoices = useCallback(async () => {
-    try {
-      const res = await fetch("/api/invoices");
-      const data = await res.json();
-      setInvoiceList(data.invoices || []);
-    } catch (err) {
-      console.error("Failed to fetch invoices:", err);
-    }
-  }, []);
-
-  const handleCreatePayment = async () => {
-    if (!paymentForm.customer || !paymentForm.amount) return;
-    try {
-      const res = await fetch("/api/payments/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(paymentForm),
-      });
-      const data = await res.json();
-      setPaymentResult(data);
-      if (data.success) {
-        setPaymentForm({ customer: "", product: "", amount: "" });
-        fetchInvoices();
-      }
-    } catch (err) {
-      setPaymentResult({ error: err.message });
-    }
-  };
 
   useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      await Promise.all([fetchStatus(), fetchLogs(), fetchInvoices()]);
-      setLoading(false);
-    };
-    load();
-    const interval = setInterval(fetchStatus, 30000);
-    return () => clearInterval(interval);
-  }, [fetchStatus, fetchLogs]);
+    (async () => { await Promise.all([fetchSlow(), fetchFast()]); setLoading(false); })();
+    const f = setInterval(fetchFast, 12000);
+    const s = setInterval(fetchSlow, 30000);
+    return () => { clearInterval(f); clearInterval(s); };
+  }, [fetchSlow, fetchFast]);
 
-  useEffect(() => {
-    brainEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [brainMessages]);
-
-  // --- Handlers ---
-  const handleSendBrainMessage = async () => {
-    if (!brainInput.trim() || isThinking) return;
-    const userMsg = { role: "user", content: brainInput.trim() };
-    setBrainMessages((prev) => [...prev, userMsg]);
-    setBrainInput("");
-    setIsThinking(true);
-    try {
-      const res = await fetch("/api/brain", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMsg.content }),
-      });
-      const data = await res.json();
-      setBrainMessages((prev) => [...prev, { role: "assistant", content: data.response || "I'm having trouble processing that. Please try again." }]);
-    } catch {
-      setBrainMessages((prev) => [...prev, { role: "assistant", content: "Connection issue. Please try again in a moment." }]);
-    } finally {
-      setIsThinking(false);
-    }
+  const runCycle = async () => {
+    if (running) return;
+    setRunning(true);
+    try { await fetch("/api/cron/daily-agents"); await Promise.all([fetchFast(), fetchSlow()]); } catch {}
+    setRunning(false);
   };
 
-  const handleRunAllAgents = async () => {
-    setIsThinking(true);
-    setBrainMessages((prev) => [...prev, { role: "assistant", content: "🚀 Initiating full agent sweep — running all 7 autonomous agents..." }]);
-    try {
-      const res = await fetch("/api/cron/daily-agents", { method: "POST" });
-      const data = await res.json();
-      await fetchStatus();
-      await fetchLogs();
-      const results = data.results || [];
-      const summary = results.map((r) => `• ${r.agent} — ${r.action}${r.product ? ` (${r.product})` : ""}`).join("\n");
-      setBrainMessages((prev) => [...prev, { role: "assistant", content: `✅ Agent cycle complete (${data.duration}):\n\n${summary}\n\nCheck the Dashboard for updated metrics!` }]);
-    } catch {
-      setBrainMessages((prev) => [...prev, { role: "assistant", content: "⚠️ Agent run encountered an issue. Please try again." }]);
-    } finally {
-      setIsThinking(false);
-    }
+  const fin = a?.financials || {};
+  const agents = status?.agents || a?.agents || [];
+  const onlineCount = agents.filter((x) => x.status === "active" || x.status === "running").length;
+  const byStatus = a?.pipeline?.by_status || {};
+  const products = a?.products || [];
+  const liveProducts = products.filter((p) => p.status === "live" || p.status === "launched").length || (byStatus.launched || 0);
+  const revByDay = fin.revenue_by_day || {};
+  const revSeries = Object.keys(revByDay).sort().map((k) => ({ k, v: Number(revByDay[k]) || 0 }));
+  const revSpark = revSeries.map((d) => d.v);
+
+  const lastEvent = logs[0];
+  const alive = lastEvent && (Date.now() - new Date(lastEvent.created_at).getTime()) < 20 * 60 * 1000;
+
+  const agentBars = agents.slice(0, 8).map((ag) => {
+    const da = a?.agents?.find((x) => x.key === ag.key);
+    return { label: ag.key, v: (da?.recentActions ?? da?.tasksCompleted ?? ag.tasksCompleted ?? 0) };
+  });
+
+  const pendingBuild = deploy?.counts?.find?.((c) => c.status === "pending")?.n || 0;
+  const activeDeploy = (deploy?.deployments || []).find((d) => d.status === "building");
+
+  const notifs = [];
+  for (const i of (ins?.insights || [])) {
+    if (i.priority === "high" || i.priority === "medium") notifs.push({ tone: i.priority === "high" ? C.amber : C.cyan, title: i.title, body: i.content, ts: ins.timestamp });
+  }
+  for (const l of logs.slice(0, 25)) {
+    const t = logTone(l.action);
+    if (t === C.red) notifs.push({ tone: C.red, title: `${l.agent}: ${humanize(l.action)}`, body: l.details || "", ts: l.created_at });
+    else if (t === C.green && /sale|fund|paid|purchase|launch/.test((l.action || "").toLowerCase())) notifs.push({ tone: C.green, title: `${l.agent}: ${humanize(l.action)}`, body: l.details || "", ts: l.created_at });
+  }
+  notifs.sort((x, y) => new Date(y.ts || 0) - new Date(x.ts || 0));
+  const unread = notifs.filter((n) => new Date(n.ts || 0).getTime() > lastSeen).length;
+  const openNotifs = () => {
+    setNotifOpen((o) => !o);
+    if (!notifOpen) { const now = Date.now(); localStorage.setItem("nexai_last_seen", String(now)); setLastSeen(now); }
   };
 
-  const handleRunAgent = async (agentKey) => {
-    try {
-      const res = await fetch(`/api/agent/${agentKey}`, { method: "POST" });
-      const data = await res.json();
-      await fetchStatus();
-      await fetchLogs();
-      return data;
-    } catch (err) {
-      console.error(`Failed to run agent ${agentKey}:`, err);
-      return { success: false };
-    }
-  };
-
-  const handleRunAgentClick = async (agentKey) => {
-    setRunningAgents(prev => new Set(prev).add(agentKey));
-    const activityMap = {
-      ceo: "Reviewing strategy & making launch decisions...",
-      marketing: "Researching markets & generating product ideas...",
-      tech: "Building & developing products...",
-      product: "Designing UI/UX & improving product quality...",
-      sales: "Finding leads & creating outreach campaigns...",
-      finance: "Analyzing finances & optimizing revenue...",
-      analytics: "Testing products & validating quality...",
-    };
-    setAgentActivities(prev => ({ ...prev, [agentKey]: activityMap[agentKey] || "Working..." }));
-    const result = await handleRunAgent(agentKey);
-    if (result?.result) {
-      const r = result.result;
-      let doneMsg = "✅ Completed";
-      if (r.productCreated) doneMsg = `✅ Created: ${r.productCreated}`;
-      else if (r.built) doneMsg = `🔧 Built ${r.built} items`;
-      else if (r.validated) doneMsg = `🧪 Validated ${r.validated} products`;
-      else if (r.launched) doneMsg = `🚀 Launched: ${r.launched}`;
-      else if (r.leadsFound) doneMsg = `💰 Found ${r.leadsFound} leads`;
-      else if (r.designed) doneMsg = `🎨 Designed ${r.designed} products`;
-      else if (r.selfImprovement) doneMsg = `📚 Studying: ${r.selfImprovement.substring(0, 50)}...`;
-      setAgentActivities(prev => ({ ...prev, [agentKey]: doneMsg }));
-    }
-    setRunningAgents(prev => { const n = new Set(prev); n.delete(agentKey); return n; });
-    setTimeout(() => {
-      setAgentActivities(prev => { const n = {...prev}; delete n[agentKey]; return n; });
-    }, 10000);
-  };
-
-  const handleRunSelectedAgents = async (agentKeys) => {
-    if (agentKeys.length === 0) return;
-    const newRunning = new Set(runningAgents);
-    agentKeys.forEach(k => newRunning.add(k));
-    setRunningAgents(newRunning);
-    
-    // Set activities
-    const activityMap = {
-      ceo: "Reviewing strategy...", marketing: "Researching markets...", tech: "Building products...",
-      product: "Designing UI/UX...", sales: "Finding leads...", finance: "Analyzing finances...", analytics: "Testing products...",
-    };
-    const newActivities = {};
-    agentKeys.forEach(k => { newActivities[k] = activityMap[k] || "Working..."; });
-    setAgentActivities(prev => ({ ...prev, ...newActivities }));
-    
-    // Run all selected in parallel
-    const results = await Promise.all(agentKeys.map(key => handleRunAgent(key)));
-    
-    // Update activities with results
-    const doneActivities = {};
-    results.forEach((result, idx) => {
-      const key = agentKeys[idx];
-      if (result?.result) {
-        const r = result.result;
-        if (r.productCreated) doneActivities[key] = `✅ ${r.productCreated}`;
-        else if (r.built) doneActivities[key] = `🔧 Built ${r.built}`;
-        else if (r.validated) doneActivities[key] = `🧪 Validated ${r.validated}`;
-        else if (r.launched) doneActivities[key] = `🚀 Launched ${r.launched}`;
-        else if (r.leadsFound) doneActivities[key] = `💰 ${r.leadsFound} leads`;
-        else if (r.designed) doneActivities[key] = `🎨 Designed ${r.designed}`;
-        else doneActivities[key] = "✅ Done";
-      }
-    });
-    setAgentActivities(prev => ({ ...prev, ...doneActivities }));
-    
-    // Clear running state
-    setRunningAgents(prev => {
-      const n = new Set(prev);
-      agentKeys.forEach(k => n.delete(k));
-      return n;
-    });
-    
-    // Clear activities after 10s
-    setTimeout(() => {
-      setAgentActivities(prev => {
-        const n = {...prev};
-        agentKeys.forEach(k => delete n[k]);
-        return n;
-      });
-    }, 10000);
-    
-    await fetchStatus();
-    await fetchLogs();
-  };
-
-  const handleViewLogs = async (agentKey) => {
-    try {
-      const res = await fetch(`/api/logs?count=100`);
-      const data = await res.json();
-      const agentName = AGENTS_CONFIG.find(a => a.key === agentKey)?.name || agentKey;
-      // Match logs by agent name (e.g. "Sales Agent" matches "Sales" or "Sales Agent")
-      const filtered = data.filter(l => {
-        const logAgent = (l.agent || "").toLowerCase();
-        return logAgent.includes(agentKey.toLowerCase()) || 
-               logAgent.includes(agentName.toLowerCase()) ||
-               agentName.toLowerCase().includes(logAgent);
-      });
-      setAgentLogs((prev) => ({ ...prev, [agentKey]: filtered.length > 0 ? filtered : data.slice(0, 20) }));
-      setViewingLogs(agentName);
-    } catch (err) {
-      console.error(`Failed to fetch logs for ${agentKey}:`, err);
-    }
-  };
-
-  const handleContactSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      await fetch("/api/invoices", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customer: contactForm.name,
-          product: `NexAI Inquiry — ${contactForm.company || "General"}`,
-          amount: 0,
-          message: contactForm.message,
-          email: contactForm.email,
-        }),
-      });
-    } catch (err) {
-      console.error("Contact form error:", err);
-    }
-    setContactSent(true);
-    setTimeout(() => {
-      setShowContactForm(false);
-      setContactSent(false);
-      setContactForm({ name: "", email: "", company: "", message: "" });
-    }, 3000);
-  };
-
-  // --- Helpers ---
-  const getStatusColor = (s) => {
-    if (s === "running") return "#00d4ff";
-    if (s === "training" || s === "learning") return "#ffaa00";
-    if (s === "active" || s === "operational") return "#00ff88";
-    if (s === "pending") return "#ffaa00";
-    if (s === "disabled") return "#6b6b8a";
-    return "#ff4466";
-  };
-
-  const getStatusLabel = (s) => {
-    if (s === "running") return "Running";
-    if (s === "training" || s === "learning") return "Training";
-    if (s === "active") return "Standby";
-    if (s === "pending") return "Pending";
-    if (s === "disabled") return "Disabled";
-    return "Error";
-  };
-
-  const isAgentRunning = (key) => runningAgents.has(key);
-  const isAgentTraining = (key) => agentActivities[key] && (agentActivities[key].includes("Learning") || agentActivities[key].includes("Studying") || agentActivities[key].includes("Training"));
-
-  const formatTime = (ts) => {
-    if (!ts) return "—";
-    return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  };
-
-  const formatDate = (ts) => {
-    if (!ts) return "—";
-    return new Date(ts).toLocaleDateString([], { month: "short", day: "numeric" });
-  };
-
-  // --- Loading screen ---
   if (loading) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, background: "var(--bg)" }}>
-        <motion.div animate={{ rotate: 360 }} transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}>
-          <Loader2 size={40} color="var(--cyan)" />
-        </motion.div>
-        <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} style={{ fontSize: 14, color: "var(--text-dim)", letterSpacing: 1 }}>
-          Initializing NexAI...
-        </motion.p>
+      <div style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>
+        <div style={{ textAlign: "center" }}>
+          <Heartbeat alive />
+          <p style={{ fontFamily: mono, fontSize: 12, color: C.muted, marginTop: 12, letterSpacing: 1 }}>CONNECTING TO NEXAI…</p>
+        </div>
       </div>
     );
   }
 
-  // --- Render ---
-  const pipeline = status?.pipeline || [];
-  const agents = status?.agents || [];
-  const invoices = status?.invoices || {};
-
+  const maxW = 1240;
   return (
-    <div style={{ minHeight: "100vh", position: "relative", overflow: "hidden", background: "var(--bg)" }}>
-      {/* Background orbs */}
-      <div style={{ position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none" }}>
-        <motion.div
-          animate={{ background: ["radial-gradient(ellipse at 20% 20%, rgba(123,47,247,0.12) 0%, transparent 50%)", "radial-gradient(ellipse at 80% 80%, rgba(0,212,255,0.1) 0%, transparent 50%)", "radial-gradient(ellipse at 50% 50%, rgba(123,47,247,0.08) 0%, transparent 50%)"] }}
-          transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
-          style={{ position: "absolute", top: "-20%", left: "-10%", width: "60%", height: "60%", borderRadius: "50%", filter: "blur(80px)" }}
-        />
-        <motion.div
-          animate={{ background: ["radial-gradient(ellipse at 80% 20%, rgba(0,212,255,0.1) 0%, transparent 50%)", "radial-gradient(ellipse at 20% 80%, rgba(123,47,247,0.1) 0%, transparent 50%)", "radial-gradient(ellipse at 60% 30%, rgba(0,255,136,0.06) 0%, transparent 50%)"] }}
-          transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
-          style={{ position: "absolute", bottom: "-20%", right: "-10%", width: "50%", height: "50%", borderRadius: "50%", filter: "blur(80px)" }}
-        />
-      </div>
-
-      {/* Header */}
-      <motion.header initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.5 }} className="header">
-        <div className="header-inner">
-          <div className="header-brand">
-            <motion.div whileHover={{ rotate: 180 }} transition={{ duration: 0.5 }} className="header-logo">
-              <Brain size={28} color="var(--cyan)" />
-            </motion.div>
-            <div>
-              <h1 className="header-title">NexAI</h1>
-              <p className="header-subtitle">Autonomous Company OS</p>
-            </div>
+    <div style={{ minHeight: "100vh", paddingBottom: 64 }}>
+      <header style={{ position: "sticky", top: 0, zIndex: 50, background: "rgba(7,7,12,0.82)", backdropFilter: "blur(14px)", borderBottom: `1px solid ${C.line}` }}>
+        <div style={{ maxWidth: maxW, margin: "0 auto", padding: "14px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <div style={{ fontFamily: display, fontSize: 19, fontWeight: 700, letterSpacing: -0.4 }}>Nex<span style={{ color: C.cyan }}>AI</span></div>
+            <span style={{ fontFamily: mono, fontSize: 10.5, color: C.muted, letterSpacing: 1, textTransform: "uppercase", borderLeft: `1px solid ${C.line}`, paddingLeft: 16 }}>Autonomous Company Control</span>
           </div>
-          <div className="header-actions">
-            <div className="status-pill">
-              <span className="status-dot" style={{ background: getStatusColor(status?.status), boxShadow: `0 0 8px ${getStatusColor(status?.status)}` }} />
-              <span>{status?.status === "operational" ? "All Systems Go" : status?.status || "Loading..."}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <div title="Company vital sign" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Heartbeat alive={alive} />
+              <span style={{ fontFamily: mono, fontSize: 11, color: alive ? C.green : C.muted }}>{alive ? "OPERATIONAL" : "IDLE"}</span>
             </div>
-            <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => setShowBrain(true)} className="btn-gradient">
-              <Sparkles size={16} color="#fff" />
-              <span>AI Brain</span>
-            </motion.button>
+            <div style={{ position: "relative" }}>
+              <button onClick={openNotifs} aria-label="Notifications" style={{ position: "relative", width: 38, height: 38, borderRadius: 10, background: C.panel, border: `1px solid ${C.line}`, color: C.ink, cursor: "pointer" }}>
+                <span style={{ fontSize: 15 }}>◔</span>
+                {unread > 0 && <span style={{ position: "absolute", top: -5, right: -5, minWidth: 17, height: 17, padding: "0 4px", borderRadius: 9, background: C.red, color: "#0b0b10", fontSize: 10, fontWeight: 700, display: "grid", placeItems: "center", fontFamily: mono }}>{unread}</span>}
+              </button>
+              <AnimatePresence>
+                {notifOpen && (
+                  <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+                    style={{ position: "absolute", right: 0, top: 46, width: 340, maxHeight: 420, overflowY: "auto", background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 12, boxShadow: "0 24px 60px rgba(0,0,0,0.55)", zIndex: 60 }}>
+                    <div style={{ padding: "12px 14px", borderBottom: `1px solid ${C.line}`, fontFamily: mono, fontSize: 11, color: C.muted, letterSpacing: 1 }}>NOTIFICATIONS</div>
+                    {notifs.length === 0 && <div style={{ padding: 24, textAlign: "center", color: C.muted, fontSize: 13 }}>All quiet. Agent activity shows up here.</div>}
+                    {notifs.slice(0, 30).map((n, i) => (
+                      <div key={i} style={{ padding: "11px 14px", borderBottom: `1px solid ${C.line}`, display: "flex", gap: 10 }}>
+                        <span style={{ width: 7, height: 7, borderRadius: "50%", background: n.tone, marginTop: 5, flexShrink: 0 }} />
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 12.5, color: C.ink, lineHeight: 1.4 }}>{n.title}</div>
+                          {n.body && <div style={{ fontSize: 11, color: C.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{String(n.body).slice(0, 80)}</div>}
+                          <div style={{ fontFamily: mono, fontSize: 10, color: C.muted, marginTop: 3 }}>{timeAgo(n.ts)} ago</div>
+                        </div>
+                      </div>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+            <button onClick={runCycle} disabled={running}
+              style={{ padding: "9px 16px", borderRadius: 10, border: "none", cursor: running ? "wait" : "pointer", fontFamily: display, fontWeight: 600, fontSize: 13, color: "#06121A", background: `linear-gradient(135deg, ${C.cyan}, ${C.violet})`, opacity: running ? 0.7 : 1 }}>
+              {running ? "Running…" : "Run cycle"}
+            </button>
           </div>
         </div>
-      </motion.header>
+      </header>
 
-      {/* Tabs */}
-      <motion.nav initial={{ y: 10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1, duration: 0.4 }} className="tabs">
-        {TABS.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.key;
-          return (
-            <motion.button key={tab.key} whileHover={{ y: -1 }} whileTap={{ scale: 0.97 }} onClick={() => setActiveTab(tab.key)} className={`tab-btn ${isActive ? "tab-active" : ""}`}>
-              <Icon size={18} color={isActive ? "var(--cyan)" : "var(--text-dim)"} />
-              <span>{tab.label}</span>
-              {isActive && <motion.div layoutId="tabIndicator" className="tab-indicator" transition={{ type: "spring", stiffness: 400, damping: 30 }} />}
-            </motion.button>
-          );
-        })}
-      </motion.nav>
+      <main style={{ maxWidth: maxW, margin: "0 auto", padding: "26px 24px" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 22, fontFamily: mono, fontSize: 11 }}>
+          <StatusPill color={alive ? C.green : C.amber} label={`Last event ${timeAgo(lastEvent?.created_at)} ago`} pulse={alive} />
+          <StatusPill color={C.cyan} label={`${onlineCount}/${agents.length} agents online`} />
+          <StatusPill color={activeDeploy ? C.cyan : pendingBuild ? C.amber : C.green} label={activeDeploy ? `Deploying ${activeDeploy.branch}` : pendingBuild ? `${pendingBuild} build queued` : "Code synced"} pulse={!!activeDeploy} />
+          <StatusPill color={C.violet} label={`${num(a?.pipeline?.total || 0)} products tracked`} />
+        </div>
 
-      {/* Main */}
-      <main className="main-content">
-        <AnimatePresence mode="wait">
-          {/* ==================== HOME (Live Operations) ==================== */}
-          {activeTab === "home" && (
-            <motion.div key="home" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.3 }}>
-              {/* Live Status Banner */}
-              {runningAgents.size > 0 && (
-                <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="running-bar">
-                  <div className="running-bar-content">
-                    <Loader2 size={14} color="var(--cyan)" className="spin" />
-                    <span>Active Job: {Array.from(runningAgents).map(k => AGENTS_CONFIG.find(a => a.key === k)?.name.replace(" Agent", "")).join(", ")}</span>
-                  </div>
-                </motion.div>
-              )}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14, marginBottom: 16 }}>
+          <Vital label="Revenue" value={money(fin.total_revenue)} accent={C.green} spark={revSpark} sub={`${money(fin.pending_revenue)} pending · ${fin.collection_rate || 0}% collected`} />
+          <Vital label="Agents online" value={`${onlineCount}/${agents.length}`} accent={C.cyan} sub={`${agents.filter((x) => x.status === "running").length} executing now`} />
+          <Vital label="Products live" value={num(liveProducts)} accent={C.violet} sub={`${num(a?.pipeline?.total || 0)} in pipeline`} />
+          <Vital label="Invoices paid" value={num(fin.paid_invoices || 0)} accent={C.amber} sub={`${num(fin.total_invoices || 0)} total invoices`} />
+        </div>
 
-              {/* Agent Live Status Grid */}
-              <div className="card" style={{ marginBottom: 20 }}>
-                <h2 className="card-title"><Zap size={18} color="var(--cyan)" /> Live Agent Status</h2>
-                <div className="live-agents-grid">
-                  {AGENTS_CONFIG.map((agent) => {
-                    const agentData = agents.find(a => a.key === agent.key);
-                    const isRunning = runningAgents.has(agent.key);
-                    const isTraining = isAgentTraining(agent.key);
-                    const Icon = agent.icon;
-                    return (
-                      <div key={agent.key} className={`live-agent-card ${isRunning ? "live-agent-running" : isTraining ? "live-agent-training" : ""}`}>
-                        <div className="live-agent-icon" style={{ background: `${agent.color}15`, border: `2px solid ${isRunning ? "var(--cyan)" : isTraining ? "var(--orange)" : agent.color + "40"}` }}>
-                          {isRunning ? <Loader2 size={16} color="var(--cyan)" className="spin" /> : isTraining ? <Brain size={16} color="var(--orange)" /> : <Icon size={16} color={agent.color} />}
-                        </div>
-                        <div className="live-agent-info">
-                          <span className="live-agent-name">{agent.name.replace(" Agent", "")}</span>
-                          <span className={`live-agent-status ${isRunning ? "status-running" : isTraining ? "status-training" : "status-standby"}`}>
-                            {isRunning ? "Running" : isTraining ? "Training" : "Standby"}
-                          </span>
-                        </div>
-                        {agentActivities[agent.key] && (
-                          <span className="live-agent-activity">{agentActivities[agent.key]}</span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 16, marginBottom: 16 }} className="nx-2col">
+          <Panel title="Revenue" hint="Collected per day, last 7 days" right={<span style={{ fontFamily: mono, fontSize: 18, color: C.green }}>{money(fin.total_revenue)}</span>}>
+            {revSpark.some((v) => v > 0) ? <AreaChart data={revSeries} color={C.green} /> : <Empty text="No revenue yet. The first agent purchase will show here." h={130} />}
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, fontFamily: mono, fontSize: 9.5, color: C.muted }}>
+              {revSeries.map((d, i) => <span key={i}>{d.k.slice(5)}</span>)}
+            </div>
+          </Panel>
+          <Panel title="Product pipeline" hint="Ideas advancing to launch">
+            {(a?.pipeline?.total || 0) > 0 ? <Funnel byStatus={byStatus} /> : <Empty text="No products yet. Agents are still building the catalog." h={120} />}
+          </Panel>
+        </div>
 
-              {/* Live Activity Feed + Pipeline */}
-              <div className="dashboard-grid">
-                <div className="card activity-card">
-                  <h2 className="card-title"><Activity size={18} color="var(--cyan)" /> Live Activity Feed</h2>
-                  <div className="activity-list">
-                    {logs.slice(0, 15).map((log, i) => (
-                      <motion.div key={i} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.02, duration: 0.2 }} className="activity-item">
-                        <div className={`activity-dot ${log.type === "success" ? "dot-green" : log.type === "warning" ? "dot-orange" : "dot-cyan"}`} />
-                        <div className="activity-content">
-                          <p className="activity-message">{log.action || log.message || "System update"}</p>
-                          <p className="activity-time">{formatTime(log.timestamp)} · {log.agent || "System"}</p>
-                        </div>
-                      </motion.div>
-                    ))}
-                    {logs.length === 0 && <p className="empty-state">No recent activity</p>}
-                  </div>
-                </div>
-
-                <div className="card">
-                  <h2 className="card-title"><GitBranch size={18} color="var(--purple)" /> Pipeline Stages</h2>
-                  <div className="pipeline-bars">
-                    {[
-                      { stage: "Ideation", count: pipeline.filter(p => p.status === "ideation").length, color: "#8888a0" },
-                      { stage: "Building", count: pipeline.filter(p => p.status === "building").length, color: "var(--orange)" },
-                      { stage: "Testing", count: pipeline.filter(p => p.status === "testing").length, color: "var(--cyan)" },
-                      { stage: "Validated", count: pipeline.filter(p => p.status === "validated").length, color: "var(--purple)" },
-                      { stage: "Launched", count: pipeline.filter(p => p.status === "launched").length, color: "var(--green)" },
-                    ].map((stage) => (
-                      <div key={stage.stage} className="pipeline-bar-row">
-                        <span className="pipeline-bar-label">{stage.stage}</span>
-                        <div className="pipeline-bar-track">
-                          <motion.div initial={{ width: 0 }} animate={{ width: `${Math.max((stage.count / Math.max(pipeline.length, 1)) * 100, 4)}%` }} transition={{ delay: 0.3, duration: 0.8, ease: "easeOut" }} className="pipeline-bar-fill" style={{ background: stage.color }} />
-                        </div>
-                        <span className="pipeline-bar-count" style={{ color: stage.color }}>{stage.count}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {/* ==================== PRODUCTS TAB ==================== */}
-          {activeTab === "products" && (
-            <motion.div key="products" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.3 }}>
-              <div className="section-header">
-                <h2 className="section-title">AI Products & Services</h2>
-                <p className="section-subtitle">Built by autonomous agents. Pay via PayPal. Instant delivery.</p>
-              </div>
-              <div className="products-grid">
-                {pipeline.filter(p => p.status === "launched" || p.status === "validated").length > 0 ? (
-                  pipeline.filter(p => p.status === "launched" || p.status === "validated").map((product, i) => {
-                    const paypalUrl = product.paypal_me_link || `https://www.paypal.com/paypalme/hjr/${(product.price || 29).toFixed(2)}`;
-                    return (
-                      <motion.div key={product.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }} className="product-card">
-                        <div className="product-card-header">
-                          <div className="product-icon-wrap">
-                            <Sparkles size={24} color="var(--cyan)" />
-                          </div>
-                          <span className={`badge ${product.status === "launched" ? "badge-green" : "badge-purple"}`}>
-                            {product.status === "launched" ? "Live" : "Beta"}
-                          </span>
-                        </div>
-                        <h3 className="product-name">{product.name}</h3>
-                        <p className="product-desc">{product.description || "AI-powered solution built by autonomous agents."}</p>
-                        {product.targetAudience && <p className="product-audience">For: {product.targetAudience}</p>}
-                        <div className="product-footer">
-                          <span className="product-price">${product.price || 29}<span className="product-period">/mo</span></span>
-                          <motion.a href={paypalUrl} target="_blank" rel="noopener noreferrer" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn-gradient btn-sm product-buy-btn">
-                            <DollarSign size={14} /> Buy Now
-                          </motion.a>
-                        </div>
-                      </motion.div>
-                    );
-                  })
-                ) : (
-                  <div className="empty-state-large">
-                    <Rocket size={48} style={{ marginBottom: 16, opacity: 0.3 }} />
-                    <p>Products are being built by our agents. Check back soon!</p>
-                  </div>
-                )}
-              </div>
-              {/* Custom Service CTA */}
-              <div className="card" style={{ marginTop: 24, textAlign: "center", border: "1px solid rgba(123,47,247,0.3)" }}>
-                <h3 style={{ fontSize: 18, fontWeight: 700, color: "var(--text)", marginBottom: 8 }}>Need Something Custom?</h3>
-                <p style={{ fontSize: 14, color: "var(--text-dim)", marginBottom: 16 }}>Our agents can build custom AI solutions tailored to your needs.</p>
-                <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => setShowContactForm(true)} className="btn-gradient">
-                  <Send size={16} /> Get a Custom Quote
-                </motion.button>
-              </div>
-            </motion.div>
-          )}
-
-          {/* ==================== DASHBOARD ==================== */}
-          {activeTab === "dashboard" && (
-            <motion.div key="dashboard" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.3 }}>
-              {/* Stats */}
-              <div className="stats-grid">
-                {[
-                  { label: "Revenue (MTD)", value: `$${(status?.financials?.revenue || 0).toLocaleString()}`, change: status?.financials?.growth || "+0%", icon: DollarSign, color: "var(--green)" },
-                  { label: "Active Agents", value: agents.filter((a) => a.status === "active").length, change: agents.every((a) => a.status === "active") ? "All online" : "Some idle", icon: Users, color: "var(--cyan)" },
-                  { label: "Pipeline Items", value: pipeline.length, change: `${pipeline.filter((p) => p.status === "building").length} in progress`, icon: GitBranch, color: "var(--purple)" },
-                  { label: "Invoices", value: invoices.total || 0, change: `${invoices.pending || 0} pending`, icon: FileText, color: "var(--orange)" },
-                ].map((stat, i) => {
-                  const Icon = stat.icon;
-                  return (
-                    <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08, duration: 0.4 }} whileHover={{ y: -4, scale: 1.01 }} className="stat-card">
-                      <div className="stat-header">
-                        <div className="stat-icon" style={{ background: `${stat.color}15`, border: `1px solid ${stat.color}30` }}>
-                          <Icon size={20} color={stat.color} />
-                        </div>
-                        <span className="stat-change" style={{ color: stat.color }}>{stat.change}</span>
-                      </div>
-                      <p className="stat-value">{stat.value}</p>
-                      <p className="stat-label">{stat.label}</p>
-                    </motion.div>
-                  );
-                })}
-              </div>
-
-              {/* Agent Status + Activity */}
-              <div className="dashboard-grid">
-                <div className="card">
-                  <h2 className="card-title">
-                    <Zap size={18} color="var(--cyan)" /> Agent Status
-                  </h2>
-                  <div className="agent-list">
-                    {AGENTS_CONFIG.map((agent, i) => {
-                      const Icon = agent.icon;
-                      const agentData = agents.find((a) => a.key === agent.key);
-                      return (
-                        <motion.div key={agent.key} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 + i * 0.06, duration: 0.3 }} whileHover={{ scale: 1.02, x: 4 }} className="agent-row">
-                          <div className="agent-icon" style={{ background: `${agent.color}15`, border: `1px solid ${agent.color}40` }}>
-                            <Icon size={18} color={agent.color} />
-                          </div>
-                          <div className="agent-info">
-                            <p className="agent-name">{agent.name}</p>
-                            <p className="agent-desc">{agent.description}</p>
-                          </div>
-                          <div className={`badge ${isAgentRunning(agent.key) ? "badge-cyan" : isAgentTraining(agent.key) ? "badge-orange" : agentData?.status === "active" ? "badge-green" : "badge-red"}`}>
-                            {isAgentRunning(agent.key) ? <Loader2 size={8} className="spin" /> : isAgentTraining(agent.key) ? <Brain size={8} /> : <CircleDot size={8} />}
-                            <span>{isAgentRunning(agent.key) ? "Running" : isAgentTraining(agent.key) ? "Training" : agentData?.status === "active" ? "Standby" : "Error"}</span>
-                          </div>
-                        </motion.div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="card activity-card">
-                  <h2 className="card-title">
-                    <Activity size={18} color="var(--purple)" /> Activity Log
-                  </h2>
-                  <div className="activity-list">
-                    {logs.slice(0, 12).map((log, i) => (
-                      <motion.div key={i} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03, duration: 0.2 }} className="activity-item">
-                        <div className={`activity-dot ${log.type === "success" ? "dot-green" : log.type === "warning" ? "dot-orange" : "dot-cyan"}`} />
-                        <div className="activity-content">
-                          <p className="activity-message">{log.message || log.action || "System update"}</p>
-                          <p className="activity-time">{formatDate(log.timestamp)} {formatTime(log.timestamp)}</p>
-                        </div>
-                      </motion.div>
-                    ))}
-                    {logs.length === 0 && <p className="empty-state">No recent activity</p>}
-                  </div>
-                </div>
-              </div>
-
-              {/* Strategy */}
-              {status?.strategy && (
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="card strategy-card">
-                  <div className="strategy-header">
-                    <Target size={18} color="var(--orange)" />
-                    <h3 className="strategy-title">Current Strategy</h3>
-                  </div>
-                  <p className="strategy-text">{status.strategy}</p>
-                </motion.div>
-              )}
-            </motion.div>
-          )}
-
-          {/* ==================== PIPELINE ==================== */}
-          {activeTab === "pipeline" && (
-            <motion.div key="pipeline" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.3 }}>
-              <div className="section-header">
-                <h2 className="card-title">
-                  <Rocket size={18} color="var(--purple)" /> Product Pipeline
-                </h2>
-                <p className="section-subtitle">{pipeline.length} products tracked across all stages</p>
-              </div>
-              <div className="pipeline-grid">
-                {PIPELINE_STAGES.map((stage, stageIdx) => {
-                  const stageItems = pipeline.filter((p) => stage.statuses.includes(p.status));
-                  return (
-                    <motion.div key={stage.name} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: stageIdx * 0.1 }} className="pipeline-column">
-                      <div className="pipeline-header">
-                        <span className="pipeline-name">{stage.name}</span>
-                        <span className="pipeline-count">{stageItems.length}</span>
-                      </div>
-                      <div className="pipeline-items">
-                        {stageItems.map((item, i) => {
-                          const progress = STATUS_PROGRESS[item.status] || 0;
-                          const name = item.idea?.name || item.name || "Unnamed";
-                          return (
-                            <motion.div key={item.id || i} whileHover={{ scale: 1.02 }} className="pipeline-item">
-                              <div className="pipeline-item-header">
-                                <p className="pipeline-item-name">{name}</p>
-                                <span className="pipeline-item-progress" style={{ color: progress >= 80 ? "var(--green)" : progress >= 50 ? "var(--cyan)" : "var(--orange)" }}>{progress}%</span>
-                              </div>
-                              <div className="progress-bar">
-                                <motion.div initial={{ width: 0 }} animate={{ width: `${progress}%` }} transition={{ delay: 0.3 + i * 0.1, duration: 0.8, ease: "easeOut" }} className="progress-fill" style={{ background: progress >= 80 ? "linear-gradient(90deg, var(--green), var(--cyan))" : progress >= 50 ? "linear-gradient(90deg, var(--cyan), var(--purple))" : "linear-gradient(90deg, var(--orange), var(--red))" }} />
-                              </div>
-                              {item.idea?.pricing && <p className="pipeline-item-meta">${item.idea.pricing.amount}/{item.idea.pricing.period} — {item.idea.targetAudience}</p>}
-                              {item.qualityScore != null && <p className="pipeline-item-meta">Quality: {item.qualityScore}/10</p>}
-                            </motion.div>
-                          );
-                        })}
-                        {stageItems.length === 0 && <p className="empty-state-small">No items</p>}
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </div>
-            </motion.div>
-          )}
-
-          {/* ==================== AGENTS ==================== */}
-          {activeTab === "agents" && (
-            <motion.div key="agents" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.3 }}>
-              <div className="section-header">
-                <h2 className="card-title">
-                  <Settings size={18} color="var(--cyan)" /> Agent Configuration
-                </h2>
-                <p className="section-subtitle">7 autonomous agents running continuously</p>
-              </div>
-              
-              {/* Multi-select controls */}
-              <div className="agent-controls">
-                <span className="agent-controls-label">Select agents to run:</span>
-                {AGENTS_CONFIG.map(agent => (
-                  <button key={agent.key} onClick={() => {
-                    const newSelected = new Set(selectedAgents);
-                    if (newSelected.has(agent.key)) newSelected.delete(agent.key);
-                    else newSelected.add(agent.key);
-                    setSelectedAgents(newSelected);
-                  }} className={`agent-select-btn ${selectedAgents.has(agent.key) ? "selected" : ""}`} style={{ borderColor: selectedAgents.has(agent.key) ? agent.color : undefined, background: selectedAgents.has(agent.key) ? `${agent.color}20` : undefined, color: selectedAgents.has(agent.key) ? agent.color : undefined }}>
-                    {selectedAgents.has(agent.key) && <CheckCircle2 size={12} color={agent.color} />}
-                    {agent.name.replace(" Agent", "")}
-                  </button>
-                ))}
-                <div style={{ flex: 1 }} />
-                <button onClick={() => {
-                  if (selectedAgents.size > 0) {
-                    handleRunSelectedAgents(Array.from(selectedAgents));
-                  }
-                }} disabled={selectedAgents.size === 0 || runningAgents.size > 0} className="btn-gradient btn-sm">
-                  {runningAgents.size > 0 ? <Loader2 size={14} className="spin" /> : <Play size={14} />}
-                  Run Selected ({selectedAgents.size})
-                </button>
-                <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={handleRunAllAgents} disabled={runningAgents.size > 0} className="btn-success btn-sm">
-                  {runningAgents.size > 0 ? <Loader2 size={14} className="spin" /> : <Zap size={14} />}
-                  Run All 7
-                </motion.button>
-              </div>
-
-              {/* Running status bar */}
-              {runningAgents.size > 0 && (
-                <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="running-bar">
-                  <div className="running-bar-content">
-                    <Loader2 size={14} color="var(--cyan)" className="spin" />
-                    <span>
-                      Running {runningAgents.size} agent{runningAgents.size > 1 ? "s" : ""}: {Array.from(runningAgents).map(k => AGENTS_CONFIG.find(a => a.key === k)?.name.replace(" Agent", "")).join(", ")}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr", gap: 16, marginBottom: 16 }} className="nx-2col">
+          <Panel title="Agent crew" hint={`${agents.length} agents on the roster`}>
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              {agents.map((ag) => {
+                const da = a?.agents?.find((x) => x.key === ag.key);
+                return (
+                  <div key={ag.key} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 6px", borderBottom: `1px solid ${C.line}` }}>
+                    <span style={{ position: "relative", width: 8, height: 8, flexShrink: 0 }}>
+                      <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: agentColor(ag.status) }} />
+                      {ag.status === "running" && <motion.span style={{ position: "absolute", inset: -3, borderRadius: "50%", border: `1px solid ${C.cyan}` }} animate={{ scale: [1, 1.8], opacity: [0.7, 0] }} transition={{ duration: 1.4, repeat: Infinity }} />}
                     </span>
+                    <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textTransform: "capitalize" }}>{ag.name || ag.key}</span>
+                    <span style={{ fontFamily: mono, fontSize: 10.5, color: agentColor(ag.status), textTransform: "uppercase", width: 62, textAlign: "right" }}>{ag.status}</span>
+                    <span style={{ fontFamily: mono, fontSize: 10.5, color: C.muted, width: 62, textAlign: "right" }}>{num(da?.tasksCompleted ?? ag.tasksCompleted ?? 0)} runs</span>
+                    <span style={{ fontFamily: mono, fontSize: 10.5, color: C.muted, width: 34, textAlign: "right" }}>{timeAgo(ag.lastRun)}</span>
                   </div>
-                </motion.div>
-              )}
-
-              <div className="agent-cards-grid">
-                {AGENTS_CONFIG.map((agent, i) => {
-                  const Icon = agent.icon;
-                  const agentData = agents.find((a) => a.key === agent.key);
-                  const isRunning = runningAgents.has(agent.key);
-                  const isSelected = selectedAgents.has(agent.key);
-                  return (
-                    <motion.div key={agent.key} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.08, duration: 0.3 }} whileHover={{ y: -4 }} className={`agent-card ${isRunning ? "agent-card-running" : ""} ${isSelected ? "agent-card-selected" : ""}`} style={{ borderColor: isRunning ? "var(--cyan)" : isSelected ? agent.color : undefined, boxShadow: isRunning ? `0 0 20px ${agent.color}30` : "none" }}>
-                      <div className="agent-card-header">
-                        <div className="agent-card-icon" style={{ background: `${agent.color}15`, border: `2px solid ${agent.color}50`, boxShadow: `0 0 20px ${agent.color}20` }}>
-                          <Icon size={24} color={agent.color} />
-                        </div>
-                        <div className={`badge ${isRunning ? "badge-cyan" : agentData?.status === "active" ? "badge-green" : "badge-orange"}`}>
-                          {isRunning ? <Loader2 size={12} className="spin" /> : agentData?.status === "active" ? <CheckCircle2 size={12} /> : <Clock size={12} />}
-                          <span>{isRunning ? "Running" : agentData?.status || "active"}</span>
-                        </div>
-                      </div>
-                      <h3 className="agent-card-name">{agent.name}</h3>
-                      <p className="agent-card-desc">{agent.description}</p>
-                      {/* Live activity indicator */}
-                      <div className={`agent-activity ${isRunning ? "agent-activity-running" : ""}`}>
-                        <div className="agent-activity-row">
-                          {isRunning ? <Loader2 size={10} color="var(--cyan)" className="spin" /> : isAgentTraining(agent.key) ? <Brain size={10} color="var(--orange)" /> : <div className="agent-activity-dot" />}
-                          <span className="agent-activity-status">
-                            {isRunning ? "Working..." : isAgentTraining(agent.key) ? "Training..." : "Idle - Self-Improving"}
-                          </span>
-                        </div>
-                        {agentActivities[agent.key] && (
-                          <p className="agent-activity-detail">{agentActivities[agent.key]}</p>
-                        )}
-                      </div>
-                      <div className="agent-card-stats">
-                        <span className="agent-stat"><Zap size={12} color="var(--text-dim)" /> Auto-runs</span>
-                        <span className="agent-stat"><Activity size={12} color="var(--text-dim)" /> {agentData?.tasksCompleted || 0} tasks</span>
-                      </div>
-                      {agentData?.lastRun && <p className="agent-card-lastrun">Last run: {new Date(agentData.lastRun).toLocaleString()}</p>}
-                      <div className="agent-card-actions">
-                        <button onClick={() => handleRunAgentClick(agent.key)} disabled={isRunning} className="btn-outline btn-sm" style={{ borderColor: isRunning ? "var(--text-dim)" : agent.color, color: isRunning ? "var(--text-dim)" : agent.color, opacity: isRunning ? 0.6 : 1 }}>
-                          {isRunning ? <Loader2 size={12} className="spin" /> : <Play size={12} />}
-                          {isRunning ? "Running..." : "Run Now"}
-                        </button>
-                        <button onClick={() => handleViewLogs(agent.key)} className="btn-ghost btn-sm">
-                          <Eye size={12} /> Logs
-                        </button>
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </div>
-            </motion.div>
-          )}
-
-          {/* INVOICES TAB — READ ONLY STATUS */}
-          {activeTab === "invoices" && (
-            <motion.div key="invoices" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.3 }}>
-              <div className="section-header-row">
-                <div>
-                  <h2 className="section-title">Invoices</h2>
-                  <p className="section-subtitle">{invoiceList.length} total · {invoiceList.filter(i => i.status === "pending").length} pending · {invoiceList.filter(i => i.status === "paid").length} paid</p>
+                );
+              })}
+            </div>
+          </Panel>
+          <Panel title="Live telemetry" hint="Real-time agent activity stream"
+            right={<span style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: mono, fontSize: 10, color: C.muted }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: alive ? C.green : C.muted }} />STREAM</span>}>
+            <div style={{ maxHeight: 300, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+              {logs.length === 0 && <Empty text="No activity yet. Hit Run cycle to wake the agents." h={120} />}
+              {logs.map((l, i) => (
+                <div key={`${l.id}-${i}`} style={{ display: "flex", gap: 10, padding: "7px 2px", borderBottom: `1px solid ${C.line}`, alignItems: "baseline" }}>
+                  <span style={{ fontFamily: mono, fontSize: 10, color: C.muted, width: 34, flexShrink: 0 }}>{timeAgo(l.created_at)}</span>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: logTone(l.action), flexShrink: 0, alignSelf: "center" }} />
+                  <span style={{ fontFamily: mono, fontSize: 11, color: C.cyan, width: 78, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.agent}</span>
+                  <span style={{ fontSize: 12, color: C.ink, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{humanize(l.action)}{l.details ? <span style={{ color: C.muted }}> — {String(l.details).replace(/[{}"]/g, "").slice(0, 70)}</span> : null}</span>
                 </div>
-                <button onClick={() => { fetchInvoices(); fetchStatus(); }} className="btn-outline-cyan">Refresh</button>
-              </div>
-              {invoiceList.length === 0 ? (
-                <div className="empty-state-large">
-                  <FileText size={48} style={{ marginBottom: 16, opacity: 0.3 }} />
-                  <p>No invoices yet. The agents are working on generating sales.</p>
-                </div>
-              ) : (
-                <div className="invoice-list">
-                  {invoiceList.map((inv) => (
-                    <div key={inv.id} className="invoice-item">
-                      <div className="invoice-info">
-                        <div className="invoice-top-row">
-                          <span className="invoice-product">{inv.product}</span>
-                          <span className={`badge ${inv.status === "paid" ? "badge-green" : inv.status === "pending" ? "badge-orange" : "badge-red"}`}>{inv.status.toUpperCase()}</span>
-                        </div>
-                        <div className="invoice-customer">{inv.customer}</div>
-                        {inv.paid_at && <div className="invoice-paid-at">Paid: {new Date(inv.paid_at).toLocaleString()}</div>}
-                      </div>
-                      <div className="invoice-amount" style={{ color: inv.status === "paid" ? "var(--green)" : "var(--cyan)" }}>${inv.amount}</div>
+              ))}
+            </div>
+          </Panel>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr", gap: 16 }} className="nx-2col">
+          <Panel title="Agent throughput" hint="Total runs per agent">
+            {agentBars.some((b) => b.v > 0) ? <Bars items={agentBars} /> : <Empty text="No agent runs recorded yet." h={120} />}
+          </Panel>
+          <Panel title="Catalog" hint="AI services on sale to agents"
+            right={<a href="/store" style={{ fontFamily: mono, fontSize: 11, color: C.cyan, textDecoration: "none" }}>Open store →</a>}>
+            {products.length === 0
+              ? <Empty text="No services live yet. The Product agent lists them as it invents them." h={120} />
+              : (
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  {products.slice(0, 8).map((p, i) => (
+                    <div key={p.id || i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "9px 2px", borderBottom: `1px solid ${C.line}` }}>
+                      <span style={{ minWidth: 0, fontSize: 13, color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
+                      <span style={{ fontFamily: mono, fontSize: 11, color: C.muted, flexShrink: 0 }}>{p.category}</span>
+                      <span style={{ fontFamily: mono, fontSize: 12, color: C.green, flexShrink: 0, width: 76, textAlign: "right" }}>{money(p.price)}{p.deliveryType === "api" ? "/call" : ""}</span>
                     </div>
                   ))}
                 </div>
               )}
-            </motion.div>
-          )}
+          </Panel>
+        </div>
 
-          {/* PAYMENTS TAB — SHOW ONLY SUCCESSFUL PAYMENTS */}
-          {activeTab === "payments" && (
-            <motion.div key="payments" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.3 }}>
-              <div className="section-header-row">
-                <div>
-                  <h2 className="section-title">Successful Payments</h2>
-                  <p className="section-subtitle">Payments received from clients</p>
-                </div>
-                <button onClick={() => { fetchInvoices(); fetchStatus(); }} className="btn-outline-cyan">Refresh</button>
-              </div>
-              {invoiceList.filter(i => i.status === "paid").length === 0 ? (
-                <div className="empty-state-large">
-                  <DollarSign size={48} style={{ marginBottom: 16, opacity: 0.3 }} />
-                  <p>No payments received yet. The sales agent is working on closing deals.</p>
-                </div>
-              ) : (
-                <div className="invoice-list">
-                  {invoiceList.filter(i => i.status === "paid").map((inv) => (
-                    <div key={inv.id} className="invoice-item" style={{ borderColor: "rgba(0,255,136,0.3)" }}>
-                      <div className="invoice-info">
-                        <div className="invoice-top-row">
-                          <span className="invoice-product">{inv.product}</span>
-                          <span className="badge badge-green">PAID</span>
-                        </div>
-                        <div className="invoice-customer">{inv.customer}</div>
-                        {inv.paid_at && <div className="invoice-paid-at">Received: {new Date(inv.paid_at).toLocaleString()}</div>}
-                      </div>
-                      <span className="invoice-amount" style={{ color: "var(--green)" }}>+${inv.amount}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {(ins?.strategy || status?.strategy) && (
+          <Panel title="Current strategy" hint="Set autonomously by the CEO agent" style={{ marginTop: 16 }}>
+            <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: "#C3C7D6" }}>{ins?.strategy || status?.strategy}</p>
+          </Panel>
+        )}
       </main>
 
-      {/* Footer */}
-      <footer className="site-footer">
-        <div className="footer-inner">
-          <p className="footer-text">© 2026 NexAI — Autonomous AI Company. Powered by 7 intelligent agents.</p>
-          <div className="footer-status">
-            <span className="badge badge-green">● System Online</span>
-          </div>
-        </div>
-      </footer>
-
-      {/* ==================== AI BRAIN MODAL ==================== */}
-      <AnimatePresence>
-        {showBrain && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="modal-overlay" onClick={() => setShowBrain(false)}>
-            <motion.div initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 20 }} transition={{ type: "spring", stiffness: 300, damping: 25 }} className="modal-container" onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
-                <div className="modal-header-brand">
-                  <div className="modal-header-icon">
-                    <Brain size={22} color="var(--cyan)" />
-                  </div>
-                  <div>
-                    <h2 className="modal-title">NexAI Brain</h2>
-                    <p className="modal-subtitle">Direct all agents from one place</p>
-                  </div>
-                </div>
-                <button onClick={() => setShowBrain(false)} className="modal-close-btn">
-                  <X size={20} color="var(--text-dim)" />
-                </button>
-              </div>
-
-              <div className="modal-body">
-                {brainMessages.map((msg, i) => (
-                  <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className={`chat-message ${msg.role === "user" ? "chat-message-user" : "chat-message-assistant"}`}>
-                    {msg.role === "assistant" && <div className="chat-avatar"><Sparkles size={12} color="var(--cyan)" /></div>}
-                    <div className="chat-bubble">
-                      {msg.content.split("\n").map((line, j) => (
-                        <p key={j} style={{ margin: line ? "4px 0" : 0 }}>{line}</p>
-                      ))}
-                    </div>
-                  </motion.div>
-                ))}
-                {isThinking && (
-                  <div className="chat-thinking">
-                    <div className="chat-avatar"><Sparkles size={12} color="var(--cyan)" /></div>
-                    <div className="chat-thinking-dots">
-                      <motion.span animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1.2, repeat: Infinity, delay: 0 }}>●</motion.span>
-                      <motion.span animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1.2, repeat: Infinity, delay: 0.2 }}>●</motion.span>
-                      <motion.span animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1.2, repeat: Infinity, delay: 0.4 }}>●</motion.span>
-                    </div>
-                  </div>
-                )}
-                <div ref={brainEndRef} />
-              </div>
-
-              <div className="brain-suggestions">
-                {["Run all agents", "Show company status", "Revenue report", "Pipeline update"].map((q) => (
-                  <motion.button key={q} whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={() => { setBrainInput(q); setTimeout(() => handleSendBrainMessage(), 50); }} className="brain-suggestion-btn">
-                    {q}
-                  </motion.button>
-                ))}
-              </div>
-
-              <div className="modal-input-area">
-                <input type="text" value={brainInput} onChange={(e) => setBrainInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSendBrainMessage()} placeholder="Ask the AI Brain anything..." className="modal-input" />
-                <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={handleSendBrainMessage} disabled={isThinking || !brainInput.trim()} className="modal-send-btn">
-                  <Send size={18} color="#fff" />
-                </motion.button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ==================== AGENT LOGS MODAL ==================== */}
-      <AnimatePresence>
-        {viewingLogs && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="modal-overlay" onClick={() => setViewingLogs(null)}>
-            <motion.div initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 20 }} className="modal-container" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
-                <div className="modal-header-brand">
-                  <div className="modal-header-icon">
-                    <Activity size={22} color="var(--cyan)" />
-                  </div>
-                  <div>
-                    <h2 className="modal-title">{viewingLogs} Agent Logs</h2>
-                    <p className="modal-subtitle">Recent activity</p>
-                  </div>
-                </div>
-                <button onClick={() => setViewingLogs(null)} className="modal-close-btn">
-                  <X size={20} color="var(--text-dim)" />
-                </button>
-              </div>
-              <div className="logs-body">
-                {(agentLogs[viewingLogs] || []).length > 0 ? (
-                  agentLogs[viewingLogs].map((log, i) => (
-                    <div key={i} className="log-item">
-                      <div className="log-dot" />
-                      <div className="log-content">
-                        <p className="log-action">{log.action || "Action"}</p>
-                        <p className="log-meta">
-                          {log.details ? JSON.stringify(log.details).substring(0, 100) : ""}{" "}
-                          {log.timestamp ? new Date(log.timestamp).toLocaleString() : ""}
-                        </p>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <p className="empty-state">No logs yet. Run the agent to generate activity.</p>
-                )}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ==================== CONTACT FORM MODAL ==================== */}
-      <AnimatePresence>
-        {showContactForm && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="modal-overlay" onClick={() => setShowContactForm(false)}>
-            <motion.div initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 20 }} transition={{ type: "spring", stiffness: 300, damping: 25 }} className="modal-container" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header" style={{ position: "relative" }}>
-                <div style={{ flex: 1 }}>
-                  <h2 className="modal-title">Get in Touch</h2>
-                  <p className="modal-subtitle">Interested in NexAI? We'll send you an invoice manually.</p>
-                </div>
-                <button onClick={() => setShowContactForm(false)} className="modal-close-btn" style={{ position: "absolute", top: 20, right: 20 }}>
-                  <X size={20} color="var(--text-dim)" />
-                </button>
-              </div>
-              {contactSent ? (
-                <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="contact-success">
-                  <CheckCircle2 size={48} color="var(--green)" />
-                  <h3 className="contact-success-title">Message Sent!</h3>
-                  <p className="contact-success-text">We'll get back to you with an invoice within 24 hours.</p>
-                </motion.div>
-              ) : (
-                <form onSubmit={handleContactSubmit} className="contact-form">
-                  {[
-                    { label: "Full Name", key: "name", type: "text", placeholder: "John Doe" },
-                    { label: "Email", key: "email", type: "email", placeholder: "john@company.com" },
-                    { label: "Company", key: "company", type: "text", placeholder: "Acme Corp" },
-                  ].map((field) => (
-                    <div key={field.key} className="contact-form-field">
-                      <label className="contact-label">{field.label}</label>
-                      <input type={field.type} placeholder={field.placeholder} value={contactForm[field.key]} onChange={(e) => setContactForm((prev) => ({ ...prev, [field.key]: e.target.value }))} required className="contact-input" />
-                    </div>
-                  ))}
-                  <div className="contact-form-field">
-                    <label className="contact-label">Message</label>
-                    <textarea placeholder="Tell us about your needs..." value={contactForm.message} onChange={(e) => setContactForm((prev) => ({ ...prev, message: e.target.value }))} rows={3} className="contact-input" style={{ resize: "vertical" }} />
-                  </div>
-                  <motion.button type="submit" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="btn-gradient" style={{ justifyContent: "center", marginTop: 4, width: "100%" }}>
-                    Send Message <Send size={16} color="#fff" />
-                  </motion.button>
-                </form>
-              )}
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <style>{`@media (max-width: 880px) { .nx-2col { grid-template-columns: 1fr !important; } }`}</style>
     </div>
   );
 }
