@@ -13,11 +13,19 @@ export async function POST(request) {
   const pool = getPool();
   try {
     const del = await pool.query("DELETE FROM invoices WHERE api_key IS NULL RETURNING id");
+    // Purge the seeded real-company "leads" (Anthropic, Coveo, etc.) — anything
+    // not from the prospector's AI-venue discovery. They were the source of the
+    // bogus company invoices; nothing should be billing real companies.
+    let leadsDeleted = 0;
+    try {
+      const l = await pool.query("DELETE FROM leads WHERE source IS DISTINCT FROM 'ai_discovery' RETURNING id");
+      leadsDeleted = l.rowCount;
+    } catch {}
     // Recompute revenue from real sales (orders), not demo invoices.
     const { rows } = await pool.query("SELECT COALESCE(SUM(amount),0)::float AS r FROM orders");
     const realRevenue = Number(rows[0]?.r || 0);
     await pool.query("UPDATE financials SET revenue = $1 WHERE id = 1", [realRevenue]);
-    return Response.json({ success: true, deletedInvoices: del.rowCount, revenueReset: realRevenue });
+    return Response.json({ success: true, deletedInvoices: del.rowCount, leadsDeleted, revenueReset: realRevenue });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }
