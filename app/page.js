@@ -431,14 +431,19 @@ export default function Home() {
           </Panel>
           <Panel title="Live telemetry" hint="Real-time agent activity stream"
             right={<span style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: mono, fontSize: 10, color: C.muted }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: alive ? C.green : C.muted }} />STREAM</span>}>
-            <div style={{ maxHeight: 300, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+            <div style={{ maxHeight: 460, overflowY: "auto", display: "flex", flexDirection: "column" }}>
               {logs.length === 0 && <Empty text="No activity yet. Hit Run cycle to wake the agents." h={120} />}
               {logs.map((l, i) => (
-                <div key={`${l.id}-${i}`} style={{ display: "flex", gap: 10, padding: "7px 2px", borderBottom: `1px solid ${C.line}`, alignItems: "baseline" }}>
-                  <span style={{ fontFamily: mono, fontSize: 10, color: C.muted, width: 34, flexShrink: 0 }}>{timeAgo(l.created_at)}</span>
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: logTone(l.action), flexShrink: 0, alignSelf: "center" }} />
-                  <span style={{ fontFamily: mono, fontSize: 11, color: C.cyan, width: 78, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.agent}</span>
-                  <span style={{ fontSize: 12, color: C.ink, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{humanize(l.action)}{l.details ? <span style={{ color: C.muted }}> — {String(l.details).replace(/[{}"]/g, "").slice(0, 70)}</span> : null}</span>
+                <div key={`${l.id}-${i}`} style={{ padding: "8px 2px", borderBottom: `1px solid ${C.line}` }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: logTone(l.action), flexShrink: 0 }} />
+                    <span style={{ fontFamily: mono, fontSize: 11, color: C.cyan }}>{l.agent}</span>
+                    <span style={{ fontFamily: mono, fontSize: 10, color: C.muted, marginLeft: "auto" }}>{timeAgo(l.created_at)} ago</span>
+                  </div>
+                  <div style={{ fontSize: 12.5, color: C.ink, marginTop: 3, lineHeight: 1.45, wordBreak: "break-word" }}>
+                    {humanize(l.action)}
+                    {l.details ? <span style={{ color: C.muted }}> — {String(l.details).replace(/[{}"]/g, "").slice(0, 300)}</span> : null}
+                  </div>
                 </div>
               ))}
             </div>
