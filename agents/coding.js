@@ -1,17 +1,11 @@
 import { logAction, updateAgentStatus, getStatus, getPool } from "../lib/db.js";
-import fs from "fs";
-import path from "path";
 
-// The Coding Agent reads CEO-appointed agents from the database
-// and generates fully functional agent code for them.
+// The Coding Agent reads CEO-appointed agents from the database,
+// generates code, and stores it in the agent_code table.
+// The /api/agents/deploy endpoint then pushes to GitHub via API → Vercel auto-deploys.
 
 function sanitize(str) {
-  return (str || "")
-    .replace(/\\/g, "\\\\")
-    .replace(/"/g, '\\"')
-    .replace(/\n/g, " ")
-    .replace(/\r/g, "")
-    .substring(0, 200);
+  return (str || "").replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, " ").replace(/\r/g, "").substring(0, 200);
 }
 
 export function generateAgentCode(agentKey, agentName, agentDescription) {
@@ -50,56 +44,34 @@ export function generateAgentCode(agentKey, agentName, agentDescription) {
 export async function runCodingCycle() {
   await updateAgentStatus("coding", "running", 0);
   const decisions = {};
-
   try {
     const pool = getPool();
+    const status = await getStatus();
     const { rows: allAgents } = await pool.query(
-      "SELECT key, name, description FROM agents WHERE key NOT IN ('ceo', 'coding') AND status = 'active' ORDER BY key"
+      "SELECT key, name, description FROM agents WHERE status = 'active' ORDER BY key"
     );
-
-    // Check which agents already have code files on disk
-    const agentsDir = path.join(process.cwd(), "agents");
-    const agentsToBuild = [];
-    for (const agent of allAgents) {
-      const filePath = path.join(agentsDir, agent.key + ".js");
-      if (fs.existsSync(filePath)) {
-        // File exists — check if it has a valid run function
-        try {
-          const content = fs.readFileSync(filePath, "utf8");
-          const capKey = agent.key.charAt(0).toUpperCase() + agent.key.slice(1);
-          const fnName = `run${capKey}Cycle`;
-          if (!content.includes(fnName)) {
-            // File exists but doesn't have the right function — rebuild
-            agentsToBuild.push(agent);
-          }
-        } catch {
-          agentsToBuild.push(agent);
-        }
-      } else {
-        // No file — need to build
-        agentsToBuild.push(agent);
-      }
-    }
-
+    const { rows: existingCode } = await pool.query(
+      "SELECT DISTINCT agent_key FROM agent_code WHERE status IN ('pending', 'deployed')"
+    );
+    const existingKeys = new Set(existingCode.map((c) => c.agent_key));
+    const coreAgents = new Set(["ceo", "marketing", "tech", "product", "sales", "finance", "analytics"]);
+    const agentsToBuild = allAgents.filter((a) => !existingKeys.has(a.key) && !coreAgents.has(a.key));
     decisions.agentsToBuild = agentsToBuild.map((a) => a.key);
-    decisions.totalAgents = allAgents.length;
-
     let built = 0;
     for (const agent of agentsToBuild) {
       try {
         const code = generateAgentCode(agent.key, agent.name, agent.description);
-        // Write to /tmp/agents/ — writable on Vercel
-        const tmpDir = "/tmp/agents";
-        if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
-        fs.writeFileSync(path.join(tmpDir, agent.key + ".js"), code);
+        await pool.query(
+          "INSERT INTO agent_code (agent_key, file_path, code, status) VALUES ($1, $2, $3, 'pending')",
+          [agent.key, "agents/" + agent.key + ".js", code]
+        );
         built++;
         decisions["built_" + agent.key] = true;
-        await logAction("Coding", "agent_built", { key: agent.key, name: agent.name });
+        await logAction("Coding", "agent_code_generated", { key: agent.key, name: agent.name });
       } catch (err) {
         decisions["failed_" + agent.key] = err.message;
       }
     }
-
     decisions.built = built;
     await updateAgentStatus("coding", "active", 1);
     return { agent: "Coding", action: "coding_cycle", ...decisions };
