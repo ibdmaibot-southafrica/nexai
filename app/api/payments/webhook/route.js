@@ -1,4 +1,4 @@
-import { updateInvoiceStatus, logAction } from "../../../../lib/db.js";
+import { updateInvoiceStatus, completeTopup, logAction } from "../../../../lib/db.js";
 import { verifyWebhookSignature } from "../../../../lib/paypal.js";
 
 export const runtime = "nodejs";
@@ -29,14 +29,24 @@ export async function POST(request) {
     console.log("[PayPal Webhook]", eventType, resource?.invoice_id || resource?.invoice);
 
     if (eventType === "PAYMENT.CAPTURE.COMPLETED" || eventType === "CHECKOUT.ORDER.APPROVED") {
-      const invoiceId = resource?.invoice_id || resource?.invoice || resource?.supplementary?.data?.invoice_id;
+      const invoiceId =
+        resource?.invoice_id ||
+        resource?.invoice ||
+        resource?.supplementary?.data?.invoice_id ||
+        resource?.purchase_units?.[0]?.reference_id;
       const amount = resource?.amount?.value || resource?.purchase_units?.[0]?.amount?.value;
       const payerEmail = resource?.payer?.email_address || resource?.payer?.payer_id;
 
       if (invoiceId) {
-        await updateInvoiceStatus(invoiceId, "paid");
-        await logAction("Finance", "payment_received", { invoiceId, amount, payerEmail, eventType });
-        console.log("[PayPal] Payment confirmed for invoice:", invoiceId);
+        // Is this an API-credit top-up? If so, credit the key; otherwise it's a
+        // normal product invoice.
+        const topup = await completeTopup(invoiceId);
+        if (topup.credited) {
+          await logAction("Finance", "credits_funded", { invoiceId, key: topup.key?.slice(0, 12) + "…", amount: topup.amount });
+        } else {
+          await updateInvoiceStatus(invoiceId, "paid");
+          await logAction("Finance", "payment_received", { invoiceId, amount, payerEmail, eventType });
+        }
       }
     }
 

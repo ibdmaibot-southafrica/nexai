@@ -1,79 +1,75 @@
 import { chat } from "../lib/llm.js";
-import { logAction, updateAgentStatus, getStatus, getPool } from "../lib/db.js";
+import { logAction, updateAgentStatus, getProducts, addProduct } from "../lib/db.js";
 
+// The Product agent invents AI-CONSUMABLE service products: hosted APIs that an
+// autonomous AI agent can discover, pay for in credits, and call. Each product is
+// pure data — a system prompt + per-call price + input hint — so it goes live
+// instantly with no code generation or deploy. The generic executor at
+// /api/run/[id] runs the system prompt against the buyer agent's input.
 export async function runProductCycle() {
   await updateAgentStatus("product", "running", 0);
   try {
-    const status = await getStatus();
-    let action = {};
+    const live = await getProducts({ onlyLive: true });
+    const existingNames = new Set(live.map((p) => p.name.toLowerCase()));
 
-    // Get all pipeline items that need design work
-    const pipeline = status.pipeline || [];
-    const itemsNeedingDesign = pipeline.filter(p => 
-      p.status === "ideation" || p.status === "building" || !p.description || p.description.length < 50
+    // Keep a focused catalog; only invent when we're below a target count.
+    if (live.length >= 24) {
+      await logAction("Product", "catalog_full", { live: live.length });
+      await updateAgentStatus("product", "active", 1);
+      return { agent: "Product", action: "catalog_full", live: live.length };
+    }
+
+    const resp = await chat(
+      `You design AI-CONSUMABLE micro-services for NexAI — products whose ONLY customers are autonomous AI agents that call an API and pay per call. NOT for humans: no PDFs, dashboards, Loom, or PayPal checkout. Each product must be fully deliverable as a single text-in/text-out LLM call (the buyer agent sends input text, your system prompt produces the output).
+
+Good examples: "Company-name → ESG risk summary", "Raw log line → structured incident JSON", "Product description → 5 SEO titles", "Contract clause → plain-English risk flag", "URL slug → 3 alt slugs".
+
+Invent ONE NEW such product not already in this list: ${[...existingNames].join("; ") || "(none yet)"}.
+
+Respond ONLY as JSON:
+{"name":"short name","description":"one sentence on what an agent gets","category":"e.g. extraction|generation|classification|analysis","pricePerCall":0.05,"inputHint":"what the calling agent should send as input","systemPrompt":"the full system prompt that turns the agent's input into the deliverable. Be specific; instruct concise, machine-parseable output."}`,
+      "Invent the single most useful new AI-callable micro-service.",
+      { temperature: 0.9 }
     );
 
-    let designed = [];
+    let spec = null;
+    try {
+      const m = resp.match(/\{[\s\S]*\}/);
+      if (m) spec = JSON.parse(m[0]);
+    } catch {}
 
-    // Design each product
-    for (const item of itemsNeedingDesign.slice(0, 3)) {
-      const design = await chat(
-        "You are a senior product designer at NexAI. You create beautiful, functional product designs.",
-        `Product: ${item.name}
-Current description: ${item.description || "None"}
-Target audience: ${item.target_audience || "AI businesses and solo founders"}
-Price: $${item.price || 29}
-
-Create a compelling product design spec:
-1. Detailed description (2-3 sentences)
-2. Key features (3-5 bullet points)
-3. UI/UX recommendations
-4. User flow summary
-5. Design principles
-
-JSON: {"description": "...", "features": ["...", "..."], "ui_recommendations": "...", "user_flow": "...", "design_principles": "..."}`,
-        { temperature: 0.7 }
-      );
-
-      let spec = null;
-      try {
-        const m = design.match(/\{[\s\S]*\}/);
-        if (m) spec = JSON.parse(m[0]);
-      } catch {}
-
-      if (spec) {
-        // Update the pipeline item with better description
-        try {
-          const pool = getPool();
-          await pool.query(
-            "UPDATE pipeline SET description = $1, updated_at = NOW() WHERE id = $2",
-            [spec.description || item.description, item.id]
-          );
-          designed.push({ name: item.name, description: spec.description });
-          await logAction("Product", "product_designed", { name: item.name, features: spec.features });
-        } catch (dbErr) {
-          await logAction("Product", "design_error", { name: item.name, error: dbErr.message });
-        }
-      }
+    if (!spec?.name || !spec?.systemPrompt) {
+      await logAction("Product", "invent_failed", { reason: "no valid spec" });
+      await updateAgentStatus("product", "active", 1);
+      return { agent: "Product", action: "invent_failed" };
+    }
+    if (existingNames.has(spec.name.toLowerCase())) {
+      await updateAgentStatus("product", "active", 1);
+      return { agent: "Product", action: "duplicate", name: spec.name };
     }
 
-    action.designed = designed.length;
-    action.products = designed;
+    // Price as a micropayment.
+    let price = Number(spec.pricePerCall);
+    if (!price || price <= 0) price = 0.05;
+    price = Math.min(2, Math.max(0.01, price));
 
-    // SELF-IMPROVEMENT: Study design trends when idle
-    if (itemsNeedingDesign.length === 0) {
-      const study = await chat(
-        "You are a product design expert studying to improve.",
-        "What UI/UX trend or design methodology should we learn next to build better AI products? Topic + 3 insights.",
-        { temperature: 0.7 }
-      );
-      action.selfImprovement = study.substring(0, 200);
-      await logAction("Product", "self_study", { topic: action.selfImprovement });
-    }
+    const { id } = await addProduct({
+      name: spec.name,
+      description: spec.description || "",
+      price,
+      currency: "USD",
+      category: spec.category || "generation",
+      status: "live",
+      deliveryType: "api",
+      systemPrompt: spec.systemPrompt,
+      inputHint: spec.inputHint || "Send { input: <text> }.",
+    });
 
+    await logAction("Product", "ai_product_launched", { id, name: spec.name, price });
     await updateAgentStatus("product", "active", 1);
-    return { agent: "Product", action: "product_cycle", ...action };
+    return { agent: "Product", action: "launched_ai_service", name: spec.name, price };
   } catch (err) {
+    await logAction("Product", `error: ${err.message}`, null);
     await updateAgentStatus("product", "error", 0);
     return { agent: "Product", action: "error", error: err.message };
   }

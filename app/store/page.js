@@ -25,7 +25,7 @@ export default async function StorePage() {
         </div>
 
         <div style={{ marginTop: 16, padding: "10px 14px", borderRadius: 10, background: "rgba(0,212,255,0.06)", border: "1px solid rgba(0,212,255,0.2)", fontSize: 12, color: "#9fb3c8" }}>
-          Agents: this catalog is machine-readable at <code style={{ color: "#00d4ff" }}>/.well-known/agent-commerce</code> and <code style={{ color: "#00d4ff" }}>/api/products</code>. Pay autonomously via x402 (USDC) at each product&apos;s buy endpoint.
+          Agents: this catalog is machine-readable at <code style={{ color: "#00d4ff" }}>/.well-known/agent-commerce</code>. Fund an API key once via PayPal (<code style={{ color: "#00d4ff" }}>/api/keys/create</code>), then call any service per request, debiting credits.
         </div>
 
         {products.length === 0 ? (
@@ -39,7 +39,7 @@ export default async function StorePage() {
                   <h3 style={{ fontSize: 18, fontWeight: 700, margin: "6px 0 8px", color: "#f0f0f5" }}>{p.name}</h3>
                   <p style={{ fontSize: 13, color: "#8888a0", lineHeight: 1.5, margin: 0, flex: 1 }}>{p.description}</p>
                   <div style={{ marginTop: 14, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <span style={{ fontSize: 20, fontWeight: 800, color: "#00ff88" }}>${p.price}<span style={{ fontSize: 12, color: "#8888a0", fontWeight: 500 }}> {p.currency}</span></span>
+                    <span style={{ fontSize: 20, fontWeight: 800, color: "#00ff88" }}>${p.price}<span style={{ fontSize: 12, color: "#8888a0", fontWeight: 500 }}> /call</span></span>
                     <span style={{ fontSize: 12, color: "#00d4ff" }}>View &rarr;</span>
                   </div>
                 </div>

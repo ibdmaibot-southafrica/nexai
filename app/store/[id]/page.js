@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { getProduct } from "../../../lib/db.js";
-import BuyButton from "./BuyButton.js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,7 +17,7 @@ export default async function ProductPage({ params }) {
     );
   }
 
-  const buyEndpoint = `/api/store/${product.id}/buy`;
+  const callUrl = `/api/run/${product.id}`;
 
   return (
     <div style={{ minHeight: "100vh", background: "#08080f", color: "#f0f0f5", padding: "48px 24px" }}>
@@ -29,22 +28,21 @@ export default async function ProductPage({ params }) {
         <p style={{ fontSize: 16, color: "#c0c0d0", lineHeight: 1.6 }}>{product.description}</p>
 
         <div style={{ margin: "24px 0", fontSize: 30, fontWeight: 800, color: "#00ff88" }}>
-          ${product.price}<span style={{ fontSize: 14, color: "#8888a0", fontWeight: 500 }}> {product.currency}</span>
+          ${product.price}<span style={{ fontSize: 14, color: "#8888a0", fontWeight: 500 }}> {product.currency} / call</span>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 20, marginTop: 8 }}>
-          <div>
-            <div style={{ fontSize: 12, color: "#8888a0", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>For humans</div>
-            <BuyButton productId={product.id} productName={product.name} price={product.price} />
-          </div>
-
-          <div style={{ paddingTop: 18, borderTop: "1px solid rgba(30,30,50,0.6)" }}>
-            <div style={{ fontSize: 12, color: "#8888a0", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>For AI agents (x402 / USDC)</div>
-            <p style={{ fontSize: 13, color: "#9fb3c8", lineHeight: 1.5, margin: "0 0 8px" }}>
-              Autonomous buyers: <code style={{ color: "#00d4ff" }}>GET {buyEndpoint}</code> returns <code style={{ color: "#00d4ff" }}>402 Payment Required</code> with payment instructions. Pay in USDC and retry with the <code style={{ color: "#00d4ff" }}>X-PAYMENT</code> header to receive the deliverable.
-            </p>
-            <p style={{ fontSize: 12, color: "#8888a0", margin: 0 }}>Delivery type: <span style={{ color: "#c0c0d0" }}>{product.deliveryType}</span></p>
-          </div>
+        <div style={{ padding: 18, borderRadius: 12, background: "rgba(18,18,30,0.7)", border: "1px solid rgba(30,30,50,0.6)" }}>
+          <div style={{ fontSize: 12, color: "#8888a0", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>For AI agents</div>
+          <p style={{ fontSize: 13, color: "#9fb3c8", lineHeight: 1.6, margin: "0 0 12px" }}>
+            This is a callable AI service. Pay with prepaid credits (funded once via PayPal), then your agent calls it autonomously.
+          </p>
+          <ol style={{ fontSize: 13, color: "#c0c0d0", lineHeight: 1.7, margin: 0, paddingLeft: 18 }}>
+            <li><code style={{ color: "#00d4ff" }}>POST /api/keys/create {"{ amount: 20 }"}</code> &rarr; get an API key + PayPal link to load $20.</li>
+            <li>Approve the PayPal payment once.</li>
+            <li><code style={{ color: "#00d4ff" }}>POST {callUrl}</code> with header <code style={{ color: "#00d4ff" }}>Authorization: Bearer &lt;key&gt;</code> and body <code style={{ color: "#00d4ff" }}>{"{ input }"}</code>.</li>
+          </ol>
+          <p style={{ fontSize: 12, color: "#8888a0", margin: "12px 0 0" }}>Input: <span style={{ color: "#c0c0d0" }}>{product.inputHint || "{ input: <text> }"}</span></p>
+          <p style={{ fontSize: 12, color: "#8888a0", margin: "6px 0 0" }}>Discovery: <code style={{ color: "#00d4ff" }}>/.well-known/agent-commerce</code></p>
         </div>
       </div>
     </div>
