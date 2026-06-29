@@ -73,24 +73,24 @@ function Sparkline({ vals, color = C.cyan, w = 90, h = 28 }) {
   );
 }
 
-const FUNNEL = [
-  { key: "ideation", label: "Ideation", color: C.muted },
-  { key: "building", label: "Building", color: C.cyan },
-  { key: "validated", label: "Validated", color: C.violet },
-  { key: "launched", label: "Launched", color: C.green },
-];
+// Known stage order + colors; any other status the data has is appended.
+const STAGE_ORDER = ["ideation", "research_complete", "building", "needs_rebuild", "built", "validated", "launched", "retired", "rejected"];
+const STAGE_COLOR = { ideation: C.muted, research_complete: C.muted, building: C.cyan, needs_rebuild: C.amber, built: C.violet, validated: C.violet, launched: C.green, retired: C.muted, rejected: C.red };
 function Funnel({ byStatus }) {
-  const max = Math.max(1, ...FUNNEL.map((s) => byStatus[s.key] || 0));
+  const keys = Object.keys(byStatus || {});
+  const ordered = [...STAGE_ORDER.filter((k) => keys.includes(k)), ...keys.filter((k) => !STAGE_ORDER.includes(k))];
+  const max = Math.max(1, ...ordered.map((k) => byStatus[k] || 0));
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {FUNNEL.map((s) => {
-        const v = byStatus[s.key] || 0;
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {ordered.map((k) => {
+        const v = byStatus[k] || 0;
+        const color = STAGE_COLOR[k] || C.cyan;
         return (
-          <div key={s.key} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ width: 78, fontFamily: mono, fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 0.5 }}>{s.label}</span>
+          <div key={k} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ width: 92, fontFamily: mono, fontSize: 10.5, color: C.muted, textTransform: "uppercase", letterSpacing: 0.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{k.replace(/_/g, " ")}</span>
             <div style={{ flex: 1, height: 22, background: "rgba(255,255,255,0.03)", borderRadius: 4, overflow: "hidden" }}>
               <motion.div initial={{ width: 0 }} animate={{ width: `${(v / max) * 100}%` }} transition={{ duration: 0.7, ease: "easeOut" }}
-                style={{ height: "100%", background: s.color, opacity: 0.85, minWidth: v > 0 ? 6 : 0 }} />
+                style={{ height: "100%", background: color, opacity: 0.85, minWidth: v > 0 ? 6 : 0 }} />
             </div>
             <span style={{ width: 28, textAlign: "right", fontFamily: mono, fontSize: 13, color: C.ink }}>{v}</span>
           </div>
@@ -132,7 +132,7 @@ function Heartbeat({ alive }) {
 /* ------------------------------------------------------------------ shells */
 function Panel({ title, hint, right, children, style }) {
   return (
-    <section style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 14, padding: 18, ...style }}>
+    <section style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 14, padding: 18, minWidth: 0, overflow: "hidden", ...style }}>
       {(title || right) && (
         <header style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 14, gap: 12 }}>
           <div>
@@ -257,16 +257,19 @@ export default function Home() {
   });
 
   const pendingBuild = deploy?.counts?.find?.((c) => c.status === "pending")?.n || 0;
-  const activeDeploy = (deploy?.deployments || []).find((d) => d.status === "building");
+  const deployments = deploy?.deployments || [];
+  const activeDeploy = deployments.find((d) => d.status === "building");
 
+  // Notifications = the things actually happening: insights + meaningful events
+  // (sales, products launched/discontinued, deploys, hires/fires, errors, throttles).
+  const NOTE = /sale|fund|paid|purchase|launch|discontinu|merged|build_started|build_failed|agent_created|agent_removed|hiring|repair|throttled|error|reject|product_/i;
   const notifs = [];
   for (const i of (ins?.insights || [])) {
-    if (i.priority === "high" || i.priority === "medium") notifs.push({ tone: i.priority === "high" ? C.amber : C.cyan, title: i.title, body: i.content, ts: ins.timestamp });
+    notifs.push({ tone: i.priority === "high" ? C.amber : i.priority === "medium" ? C.cyan : C.muted, title: i.title, body: i.content, ts: i.created_at || ins.timestamp });
   }
-  for (const l of logs.slice(0, 25)) {
-    const t = logTone(l.action);
-    if (t === C.red) notifs.push({ tone: C.red, title: `${l.agent}: ${humanize(l.action)}`, body: l.details || "", ts: l.created_at });
-    else if (t === C.green && /sale|fund|paid|purchase|launch/.test((l.action || "").toLowerCase())) notifs.push({ tone: C.green, title: `${l.agent}: ${humanize(l.action)}`, body: l.details || "", ts: l.created_at });
+  for (const l of logs.slice(0, 40)) {
+    if (!NOTE.test(l.action || "")) continue;
+    notifs.push({ tone: logTone(l.action), title: `${l.agent}: ${humanize(l.action)}`, body: l.details ? String(l.details).replace(/[{}"]/g, "") : "", ts: l.created_at });
   }
   notifs.sort((x, y) => new Date(y.ts || 0) - new Date(x.ts || 0));
   const unread = notifs.filter((n) => new Date(n.ts || 0).getTime() > lastSeen).length;
@@ -288,7 +291,7 @@ export default function Home() {
 
   const maxW = 1240;
   return (
-    <div style={{ minHeight: "100vh", paddingBottom: 64 }}>
+    <div style={{ minHeight: "100vh", paddingBottom: 64, overflowX: "hidden" }}>
       <header style={{ position: "sticky", top: 0, zIndex: 50, background: "rgba(7,7,12,0.82)", backdropFilter: "blur(14px)", borderBottom: `1px solid ${C.line}` }}>
         <div style={{ maxWidth: maxW, margin: "0 auto", padding: "14px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
@@ -426,6 +429,28 @@ export default function Home() {
                       <span style={{ width: 80, textAlign: "right", fontFamily: mono, fontSize: 12, color: p.revenue > 0 ? C.green : C.muted }}>{money(p.revenue)}</span>
                     </div>
                   ))}
+                </div>
+              )}
+          </Panel>
+        </div>
+
+        <div style={{ marginTop: 16 }}>
+          <Panel title="Shipped" hint="Code the build-gate built, tested, and merged to production">
+            {deployments.length === 0
+              ? <Empty text="Nothing shipped yet. When an agent's code passes the build-gate, the deploy shows here." h={100} />
+              : (
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  {deployments.map((d, i) => {
+                    const tone = d.status === "merged" ? C.green : d.status === "failed" ? C.red : C.cyan;
+                    return (
+                      <div key={d.id || i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 2px", borderBottom: `1px solid ${C.line}` }}>
+                        <span style={{ width: 7, height: 7, borderRadius: "50%", background: tone, flexShrink: 0 }} />
+                        <span style={{ fontFamily: mono, fontSize: 11.5, color: C.ink, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.branch}</span>
+                        <span style={{ fontFamily: mono, fontSize: 10.5, color: tone, textTransform: "uppercase", width: 70, textAlign: "right" }}>{d.status === "merged" ? "shipped" : d.status}</span>
+                        <span style={{ fontFamily: mono, fontSize: 10, color: C.muted, width: 36, textAlign: "right" }}>{timeAgo(d.updated_at || d.created_at)}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
           </Panel>

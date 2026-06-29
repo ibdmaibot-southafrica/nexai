@@ -85,15 +85,15 @@ Respond with a JSON object:
     // ═══════════════════════════════════════════════════════════
 
     if (audit?.agent_changes) {
-      // Create new agents — but cap the roster. A free LLM can't run dozens of
-      // agents; over-hiring just exhausts the daily quota. Once we're at the cap,
-      // the CEO must consolidate (fire/modify) instead of hiring.
-      const ROSTER_CAP = 10;
+      // Create new agents — but the roster is hard-capped. To hire past the cap
+      // the CEO must FIRE someone first (it has remove powers below). This keeps
+      // token spend bounded instead of blasting out of control.
+      const MAX_AGENTS = parseInt(process.env.MAX_AGENTS) || 20;
       let activeCount = (status.agents || []).filter((a) => a.status === "active" || a.status === "running").length;
       if (audit.agent_changes.create && Array.isArray(audit.agent_changes.create)) {
         for (const newAgent of audit.agent_changes.create) {
-          if (activeCount >= ROSTER_CAP) {
-            await logAction("CEO", "hiring_frozen", { reason: `roster at cap (${ROSTER_CAP}) — consolidate instead`, skipped: newAgent.key });
+          if (activeCount >= MAX_AGENTS) {
+            await logAction("CEO", "hiring_frozen", { reason: `roster at cap (${MAX_AGENTS}) — fire an agent to hire`, skipped: newAgent.key });
             break;
           }
           if (newAgent.key && newAgent.key !== "ceo" && isValidAgentKey(newAgent.key)) {

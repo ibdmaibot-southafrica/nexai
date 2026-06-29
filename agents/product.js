@@ -12,9 +12,10 @@ export async function runProductCycle() {
     const live = await getProducts({ onlyLive: true });
     const existingNames = new Set(live.map((p) => p.name.toLowerCase()));
 
-    // Keep a focused catalog; only invent when we're below a target count.
-    if (live.length >= 24) {
-      await logAction("Product", "catalog_full", { live: live.length });
+    // Keep a focused catalog; only invent when we're below the cap.
+    const MAX_PRODUCTS = parseInt(process.env.MAX_PRODUCTS) || 20;
+    if (live.length >= MAX_PRODUCTS) {
+      await logAction("Product", "catalog_full", { live: live.length, cap: MAX_PRODUCTS });
       await updateAgentStatus("product", "active", 1);
       return { agent: "Product", action: "catalog_full", live: live.length };
     }
