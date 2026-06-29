@@ -1,4 +1,5 @@
 import { getPool } from "../../../../lib/db.js";
+import { requireSecret } from "../../../../lib/auth.js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -7,8 +8,18 @@ export const maxDuration = 120;
 const GITHUB_REPO = "ibdmaibot-southafrica/nexai";
 const GITHUB_API = "https://api.github.com";
 
+// Only allow writing agent files under agents/ with a safe, flat filename.
+// Defends the auto-deploy pipeline against path traversal / overwriting other
+// files if a bad file_path ever lands in the agent_code table.
+function isSafeAgentPath(filePath) {
+  return typeof filePath === "string" && /^agents\/[a-z][a-z0-9_]{1,30}\.js$/.test(filePath);
+}
+
 // POST /api/agents/deploy — reads agent_code table, pushes to GitHub via API
-export async function POST() {
+export async function POST(request) {
+  const denied = requireSecret(request);
+  if (denied) return denied;
+
   try {
     const pool = getPool();
 
@@ -32,6 +43,18 @@ export async function POST() {
     for (const item of pendingCode) {
       try {
         const filePath = item.file_path;
+
+        // Reject anything that isn't a safe agents/<key>.js path. Mark it failed
+        // so it isn't retried forever.
+        if (!isSafeAgentPath(filePath)) {
+          await pool.query(
+            "UPDATE agent_code SET status = 'rejected' WHERE id = $1",
+            [item.id]
+          );
+          results.push({ file: filePath, status: "rejected", error: "unsafe file path" });
+          continue;
+        }
+
         const content = Buffer.from(item.code).toString("base64");
 
         // Check if file exists
@@ -103,7 +126,10 @@ export async function POST() {
 }
 
 // GET /api/agents/deploy — check pending code count
-export async function GET() {
+export async function GET(request) {
+  const denied = requireSecret(request);
+  if (denied) return denied;
+
   try {
     const pool = getPool();
     const { rows } = await pool.query(

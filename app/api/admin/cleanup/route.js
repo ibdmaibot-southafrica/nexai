@@ -1,10 +1,14 @@
 import { getPool } from "../../../../lib/db.js";
+import { requireSecret } from "../../../../lib/auth.js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // POST /api/admin/cleanup - Remove fake data and start fresh
-export async function POST() {
+export async function POST(request) {
+  const denied = requireSecret(request);
+  if (denied) return denied;
+
   const pool = getPool();
   const client = await pool.connect();
   try {
@@ -74,7 +78,10 @@ export async function POST() {
 }
 
 // GET /api/admin/cleanup - Get cleanup stats
-export async function GET() {
+export async function GET(request) {
+  const denied = requireSecret(request);
+  if (denied) return denied;
+
   const pool = getPool();
   const client = await pool.connect();
   try {

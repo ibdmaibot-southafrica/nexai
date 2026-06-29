@@ -1,4 +1,5 @@
 import { updateInvoiceStatus, logAction } from "../../../../lib/db.js";
+import { verifyWebhookSignature } from "../../../../lib/paypal.js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -6,8 +7,21 @@ export const dynamic = "force-dynamic";
 // POST /api/payments/webhook — PayPal IPN/webhook handler
 export async function POST(request) {
   try {
-    const body = await request.json();
-    
+    // Read the RAW body once — signature verification must hash the exact bytes
+    // PayPal signed, and we reuse the same string for JSON parsing.
+    const rawBody = await request.text();
+
+    // Reject forged webhooks. Without this, anyone could POST a fake
+    // "payment completed" event and mark invoices paid without paying.
+    const verified = await verifyWebhookSignature(request.headers, rawBody);
+    if (!verified) {
+      console.warn("[PayPal Webhook] Rejected unverified webhook");
+      await logAction("Finance", "payment_webhook_rejected", { reason: "signature_unverified" });
+      return Response.json({ error: "Webhook signature verification failed" }, { status: 401 });
+    }
+
+    const body = JSON.parse(rawBody);
+
     // Handle PayPal webhook events
     const eventType = body.event_type;
     const resource = body.resource;

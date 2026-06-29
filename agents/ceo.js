@@ -1,5 +1,6 @@
 import { chat } from "../lib/llm.js";
 import { logAction, updateAgentStatus, getStatus, updateState, addPipelineItem, updatePipelineItem, addAgent, removeAgent, updateAgentConfig } from "../lib/db.js";
+import { isValidAgentKey } from "./coding.js";
 
 export async function runCEOCycle() {
   await updateAgentStatus("ceo", "running", 0);
@@ -86,7 +87,7 @@ Respond with a JSON object:
       // Create new agents
       if (audit.agent_changes.create && Array.isArray(audit.agent_changes.create)) {
         for (const newAgent of audit.agent_changes.create) {
-          if (newAgent.key && newAgent.key !== "ceo") {
+          if (newAgent.key && newAgent.key !== "ceo" && isValidAgentKey(newAgent.key)) {
             await addAgent(newAgent.key, newAgent.name || newAgent.key, newAgent.description || "");
             decisions[`agent_created_${newAgent.key}`] = newAgent.name;
             await logAction("CEO", "agent_created", { key: newAgent.key, name: newAgent.name, reason: newAgent.description });

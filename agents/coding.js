@@ -8,6 +8,13 @@ function sanitize(str) {
   return (str || "").replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, " ").replace(/\r/g, "").substring(0, 200);
 }
 
+// Agent keys become a filename (agents/<key>.js) and a JS function name, and are
+// chosen by the CEO model — so they must be strictly validated to prevent path
+// traversal or invalid identifiers reaching the auto-deploy pipeline.
+export function isValidAgentKey(key) {
+  return typeof key === "string" && /^[a-z][a-z0-9_]{1,30}$/.test(key);
+}
+
 export function generateAgentCode(agentKey, agentName, agentDescription) {
   const capKey = agentKey.charAt(0).toUpperCase() + agentKey.slice(1);
   const safeName = sanitize(agentName);
@@ -55,7 +62,9 @@ export async function runCodingCycle() {
     );
     const existingKeys = new Set(existingCode.map((c) => c.agent_key));
     const coreAgents = new Set(["ceo", "marketing", "tech", "product", "sales", "finance", "analytics"]);
-    const agentsToBuild = allAgents.filter((a) => !existingKeys.has(a.key) && !coreAgents.has(a.key));
+    const agentsToBuild = allAgents.filter(
+      (a) => isValidAgentKey(a.key) && !existingKeys.has(a.key) && !coreAgents.has(a.key)
+    );
     decisions.agentsToBuild = agentsToBuild.map((a) => a.key);
     let built = 0;
     for (const agent of agentsToBuild) {

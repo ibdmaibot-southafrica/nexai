@@ -1,7 +1,6 @@
 import { logAction } from "../../../../lib/db.js";
 import { runCodingCycle } from "../../../../agents/coding.js";
-import fs from "fs";
-import path from "path";
+import { requireSecret } from "../../../../lib/auth.js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,31 +16,20 @@ const CORE_AGENTS = [
   { key: "analytics", fn: "runAnalyticsCycle", file: "analytics.js" },
 ];
 
-export async function GET() {
+export async function GET(request) {
+  const denied = requireSecret(request);
+  if (denied) return denied;
+
   const startTime = Date.now();
 
-  // Step 1: Run the Coding Agent to build new agents
+  // Step 1: Run the Coding Agent to generate code for any new agents.
+  // Generated code is persisted to the agent_code table and shipped to the repo
+  // via POST /api/agents/deploy (GitHub API) -> Vercel auto-deploy. We do NOT
+  // write to the local filesystem here: Vercel's runtime FS is read-only outside
+  // /tmp and any copy would not persist across invocations.
   let codingResult = null;
   try {
     codingResult = await runCodingCycle();
-
-    // Copy any newly built agents from /tmp to the agents directory
-    const tmpDir = "/tmp/agents";
-    const agentsDir = path.join(process.cwd(), "agents");
-    if (fs.existsSync(tmpDir)) {
-      const files = fs.readdirSync(tmpDir);
-      for (const file of files) {
-        const src = path.join(tmpDir, file);
-        const dest = path.join(agentsDir, file);
-        fs.copyFileSync(src, dest);
-      }
-      if (files.length > 0) {
-        // Clean up tmp
-        for (const file of files) {
-          fs.unlinkSync(path.join(tmpDir, file));
-        }
-      }
-    }
   } catch (err) {
     codingResult = { agent: "Coding", error: err.message };
   }

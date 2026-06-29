@@ -27,7 +27,8 @@ export async function POST(request) {
     let paypalMeLink = null;
     
     if (paypalEmail) {
-      paypalMeLink = `https://www.paypal.com/paypalme/${paypalEmail.replace("@", "").split(".")[0]}/${paypalAmount}`;
+      const paypalMeUser = process.env.PAYPAL_ME_USERNAME || paypalEmail.split("@")[0];
+      paypalMeLink = `https://www.paypal.com/paypalme/${paypalMeUser}/${paypalAmount}`;
       paypalCheckoutLink = `https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&business=${encodeURIComponent(paypalEmail)}&item_name=${paypalDescription}&amount=${paypalAmount}&currency_code=USD&invoice=${invoiceId}&return=${encodeURIComponent(siteUrl + "/payment-success")}&cancel_return=${encodeURIComponent(siteUrl + "/payment-cancelled")}`;
     }
 
