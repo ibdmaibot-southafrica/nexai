@@ -1,10 +1,11 @@
 import { chat } from "../lib/llm.js";
-import { logAction, updateAgentStatus, getStatus, updateState, addPipelineItem, updatePipelineItem, addAgent, removeAgent, updateAgentConfig } from "../lib/db.js";
+import { logAction, updateAgentStatus, getStatus, updateState, addPipelineItem, updatePipelineItem, addAgent, removeAgent, updateAgentConfig, getPool } from "../lib/db.js";
 import { isValidAgentKey } from "./coding.js";
 
 export async function runCEOCycle() {
   await updateAgentStatus("ceo", "running", 0);
   const decisions = {};
+  const pool = getPool();
 
   try {
     const status = await getStatus();
