@@ -26,6 +26,11 @@ export async function GET(request) {
       },
       keyEndpoint: `${origin}/api/keys/create`,
     },
+    mcp: {
+      endpoint: `${origin}/api/mcp`,
+      transport: "streamable-http",
+      note: "MCP server — discover services with tools/list, run them with tools/call (pass apiKey).",
+    },
     catalogUrl: `${origin}/api/products`,
     products: products
       .filter((p) => p.deliveryType === "api" && p.systemPrompt)

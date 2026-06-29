@@ -278,17 +278,6 @@ export default function Home() {
     setRunningAgent(null);
   };
 
-  const [selected, setSelected] = useState(() => new Set());
-  const [batchRunning, setBatchRunning] = useState(false);
-  const toggleSelect = (key) => setSelected((s) => { const n = new Set(s); n.has(key) ? n.delete(key) : n.add(key); return n; });
-  const runBatch = async (body) => {
-    if (batchRunning) return;
-    setBatchRunning(true);
-    try { await fetch("/api/agents/run-batch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); await Promise.all([fetchFast(), fetchSlow()]); } catch {}
-    setBatchRunning(false);
-    setSelected(new Set());
-  };
-
   const fin = a?.financials || {};
   const agents = status?.agents || a?.agents || [];
   const onlineCount = agents.filter((x) => x.status === "active" || x.status === "running").length;
@@ -432,26 +421,12 @@ export default function Home() {
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr", gap: 16, marginBottom: 16 }} className="nx-2col">
-          <Panel title="Agent crew" hint={`${agents.length} agents · select to run several`}
-            right={
-              <div style={{ display: "flex", gap: 6 }}>
-                <button onClick={() => runBatch({ keys: [...selected] })} disabled={batchRunning || selected.size === 0}
-                  style={{ padding: "4px 10px", borderRadius: 7, border: `1px solid ${C.line}`, background: "transparent", color: selected.size ? C.cyan : C.muted, fontFamily: mono, fontSize: 10, cursor: selected.size && !batchRunning ? "pointer" : "default" }}>
-                  {batchRunning ? "Running…" : `Run selected${selected.size ? ` (${selected.size})` : ""}`}
-                </button>
-                <button onClick={() => runBatch({ all: true })} disabled={batchRunning}
-                  style={{ padding: "4px 10px", borderRadius: 7, border: "none", background: C.violet, color: "#0b0b14", fontFamily: mono, fontSize: 10, cursor: batchRunning ? "wait" : "pointer" }}>
-                  Run all
-                </button>
-              </div>
-            }>
+          <Panel title="Agent crew" hint={`${agents.length} agents · the CEO delegates work each cycle`}>
             <div style={{ display: "flex", flexDirection: "column" }}>
               {agents.map((ag) => {
                 const da = a?.agents?.find((x) => x.key === ag.key);
                 return (
                   <div key={ag.key} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 6px", borderBottom: `1px solid ${C.line}` }}>
-                    <input type="checkbox" checked={selected.has(ag.key)} onChange={() => toggleSelect(ag.key)} title="Select to run in a batch"
-                      style={{ flexShrink: 0, accentColor: C.cyan, cursor: "pointer", width: 13, height: 13 }} />
                     <span style={{ position: "relative", width: 8, height: 8, flexShrink: 0 }}>
                       <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: agentColor(ag.status) }} />
                       {ag.status === "running" && <motion.span style={{ position: "absolute", inset: -3, borderRadius: "50%", border: `1px solid ${C.cyan}` }} animate={{ scale: [1, 1.8], opacity: [0.7, 0] }} transition={{ duration: 1.4, repeat: Infinity }} />}

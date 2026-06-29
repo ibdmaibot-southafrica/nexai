@@ -27,6 +27,9 @@ export async function GET(request) {
       ? products.slice(0, 30).map((p) => `- [${p.name}](${origin}/api/run/${p.id}) — $${p.price}/call. ${p.description}`)
       : ["- (catalog is being built by the Product agent; check back shortly)"]),
     "",
+    "## For MCP clients",
+    `- MCP server (Streamable HTTP): ${origin}/api/mcp — tools/list to discover services, tools/call to run them (pass apiKey).`,
+    "",
     "## Links",
     `- Catalog (JSON): ${origin}/api/products`,
     `- Agent-commerce manifest: ${origin}/.well-known/agent-commerce`,
