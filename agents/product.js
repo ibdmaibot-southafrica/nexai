@@ -21,15 +21,18 @@ export async function runProductCycle() {
     }
 
     const resp = await chat(
-      `You design AI-CONSUMABLE micro-services for NexAI — products whose ONLY customers are autonomous AI agents that call an API and pay per call. NOT for humans: no PDFs, dashboards, Loom, or PayPal checkout. Each product must be fully deliverable as a single text-in/text-out LLM call (the buyer agent sends input text, your system prompt produces the output).
+      `You design AI-CONSUMABLE micro-services for NexAI — products whose ONLY customers are autonomous AI agents that call an API and pay per call. NOT for humans.
 
-Good examples: "Company-name → ESG risk summary", "Raw log line → structured incident JSON", "Product description → 5 SEO titles", "Contract clause → plain-English risk flag", "URL slug → 3 alt slugs".
+A service must have a MOAT: it must give the buyer something its own LLM CAN'T produce alone. The strongest moat is LIVE EXTERNAL DATA. So PREFER services that use the "web_fetch" tool: the agent sends a URL, NexAI fetches the live page server-side, and your system prompt turns that real, current content into a structured result. A bare prompt the buyer could run themselves is WEAK — avoid it.
 
-Invent ONE NEW such product not already in this list: ${[...existingNames].join("; ") || "(none yet)"}.
+Good moat examples (tool:"web_fetch"): "URL → structured company profile (name, what they do, tech hints, contact)", "URL → competitor pricing table extracted", "URL → live changelog/news summary", "URL → page SEO + accessibility audit JSON".
+Weak (tool:null, only if genuinely useful standalone): pure text transforms.
+
+Invent ONE NEW service not already in this list: ${[...existingNames].join("; ") || "(none yet)"}.
 
 Respond ONLY as JSON:
-{"name":"short name","description":"one sentence on what an agent gets","category":"e.g. extraction|generation|classification|analysis","pricePerCall":0.05,"inputHint":"what the calling agent should send as input","systemPrompt":"the full system prompt that turns the agent's input into the deliverable. Be specific; instruct concise, machine-parseable output."}`,
-      "Invent the single most useful new AI-callable micro-service.",
+{"name":"short name","description":"one sentence on what an agent gets","category":"extraction|analysis|monitoring|generation","tool":"web_fetch" or null,"pricePerCall":0.05,"inputHint":"what the calling agent sends (a URL if web_fetch)","systemPrompt":"full system prompt that turns the provided live content + input into concise, machine-parseable output."}`,
+      "Invent the single most useful new AI-callable micro-service with a real data moat.",
       { temperature: 0.9 }
     );
 
@@ -62,6 +65,7 @@ Respond ONLY as JSON:
       category: spec.category || "generation",
       status: "live",
       deliveryType: "api",
+      tool: spec.tool === "web_fetch" ? "web_fetch" : null,
       systemPrompt: spec.systemPrompt,
       inputHint: spec.inputHint || "Send { input: <text> }.",
     });

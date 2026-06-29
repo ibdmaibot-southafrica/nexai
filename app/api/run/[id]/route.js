@@ -1,5 +1,7 @@
-import { getProduct, getApiKey, debitCredits, creditKey, createOrder, logAction } from "../../../../lib/db.js";
+import { createHash } from "crypto";
+import { getProduct, getApiKey, debitCredits, creditKey, createOrder, logAction, getCachedResult, setCachedResult } from "../../../../lib/db.js";
 import { chat } from "../../../../lib/llm.js";
+import { webFetch, firstUrl } from "../../../../lib/tools.js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -73,14 +75,30 @@ export async function POST(request, { params }) {
     input = "";
   }
 
-  // Execute the product (its stored system prompt + the buyer's input).
-  let result;
+  // Cache: identical (product,input) served from store — cheap + builds a dataset.
+  const inputHash = createHash("sha256").update(`${product.tool || ""}|${input}`).digest("hex").slice(0, 32);
+  let result, cached = false;
   try {
-    result = await chat(product.systemPrompt, input || "(no input provided)", { temperature: 0.5, maxTokens: 1500 });
-  } catch (err) {
-    await creditKey(key, product.price); // refund — we charged but produced nothing
-    await logAction("Store", "run_failed", { product: product.id, error: err.message });
-    return Response.json({ error: "Execution failed; credits refunded", detail: err.message }, { status: 502 });
+    const hit = await getCachedResult(product.id, inputHash);
+    if (hit) { result = hit; cached = true; }
+  } catch {}
+
+  // Execute the product. Tool-backed products pull live data first (the moat).
+  if (!cached) {
+    try {
+      let userContent = input || "(no input provided)";
+      if (product.tool === "web_fetch") {
+        const url = firstUrl(input);
+        const page = await webFetch(url); // live data the buyer's LLM can't fetch itself
+        userContent = `SOURCE URL: ${url}\n\nLIVE CONTENT:\n${page}\n\nTASK INPUT: ${input}`;
+      }
+      result = await chat(product.systemPrompt, userContent, { temperature: 0.4, maxTokens: 1500 });
+      try { await setCachedResult(product.id, inputHash, result); } catch {}
+    } catch (err) {
+      await creditKey(key, product.price); // refund — we charged but produced nothing
+      await logAction("Store", "run_failed", { product: product.id, error: err.message });
+      return Response.json({ error: "Execution failed; credits refunded", detail: err.message }, { status: 502 });
+    }
   }
 
   const order = await createOrder({
@@ -97,6 +115,7 @@ export async function POST(request, { params }) {
   return Response.json({
     product: product.name,
     result,
+    cached,
     orderId: order.id,
     charged: product.price,
     creditsRemaining: charge.balance,
