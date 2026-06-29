@@ -192,6 +192,14 @@ export default function Home() {
   const [running, setRunning] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [lastSeen, setLastSeen] = useState(0);
+  const [reportsOpen, setReportsOpen] = useState(false);
+  const [reports, setReports] = useState(null);
+  const [openReport, setOpenReport] = useState(null);
+
+  const loadReports = async () => {
+    setReportsOpen(true);
+    try { const r = await fetch("/api/reports?limit=25"); if (r.ok) { const d = await r.json(); setReports(d.reports || []); } } catch {}
+  };
 
   useEffect(() => { setLastSeen(Number(localStorage.getItem("nexai_last_seen") || 0)); }, []);
 
@@ -234,6 +242,7 @@ export default function Home() {
   const onlineCount = agents.filter((x) => x.status === "active" || x.status === "running").length;
   const byStatus = a?.pipeline?.by_status || {};
   const products = a?.products || [];
+  const topProducts = a?.top_products || [];
   const liveProducts = products.filter((p) => p.status === "live" || p.status === "launched").length || (byStatus.launched || 0);
   const revByDay = fin.revenue_by_day || {};
   const revSeries = Object.keys(revByDay).sort().map((k) => ({ k, v: Number(revByDay[k]) || 0 }));
@@ -316,6 +325,10 @@ export default function Home() {
                 )}
               </AnimatePresence>
             </div>
+            <button onClick={loadReports}
+              style={{ padding: "9px 16px", borderRadius: 10, cursor: "pointer", fontFamily: display, fontWeight: 600, fontSize: 13, color: C.ink, background: C.panel, border: `1px solid ${C.line}` }}>
+              Reports
+            </button>
             <button onClick={runCycle} disabled={running}
               style={{ padding: "9px 16px", borderRadius: 10, border: "none", cursor: running ? "wait" : "pointer", fontFamily: display, fontWeight: 600, fontSize: 13, color: "#06121A", background: `linear-gradient(135deg, ${C.cyan}, ${C.violet})`, opacity: running ? 0.7 : 1 }}>
               {running ? "Running…" : "Run cycle"}
@@ -391,17 +404,26 @@ export default function Home() {
           <Panel title="Agent throughput" hint="Total runs per agent">
             {agentBars.some((b) => b.v > 0) ? <Bars items={agentBars} /> : <Empty text="No agent runs recorded yet." h={120} />}
           </Panel>
-          <Panel title="Catalog" hint="AI services on sale to agents"
+          <Panel title="Top products" hint="Ranked by sales revenue"
             right={<a href="/store" style={{ fontFamily: mono, fontSize: 11, color: C.cyan, textDecoration: "none" }}>Open store →</a>}>
-            {products.length === 0
+            {topProducts.length === 0
               ? <Empty text="No services live yet. The Product agent lists them as it invents them." h={120} />
               : (
                 <div style={{ display: "flex", flexDirection: "column" }}>
-                  {products.slice(0, 8).map((p, i) => (
-                    <div key={p.id || i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "9px 2px", borderBottom: `1px solid ${C.line}` }}>
-                      <span style={{ minWidth: 0, fontSize: 13, color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
-                      <span style={{ fontFamily: mono, fontSize: 11, color: C.muted, flexShrink: 0 }}>{p.category}</span>
-                      <span style={{ fontFamily: mono, fontSize: 12, color: C.green, flexShrink: 0, width: 76, textAlign: "right" }}>{money(p.price)}{p.deliveryType === "api" ? "/call" : ""}</span>
+                  <div style={{ display: "flex", gap: 10, padding: "0 2px 8px", fontFamily: mono, fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 0.5, borderBottom: `1px solid ${C.line}` }}>
+                    <span style={{ width: 18 }}>#</span>
+                    <span style={{ flex: 1 }}>Product</span>
+                    <span style={{ width: 48, textAlign: "right" }}>Sales</span>
+                    <span style={{ width: 80, textAlign: "right" }}>Revenue</span>
+                  </div>
+                  {topProducts.map((p, i) => (
+                    <div key={p.id || i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 2px", borderBottom: `1px solid ${C.line}` }}>
+                      <span style={{ width: 18, fontFamily: mono, fontSize: 12, color: i === 0 && p.sales > 0 ? C.amber : C.muted }}>{i + 1}</span>
+                      <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {p.name}{p.status === "retired" ? <span style={{ color: C.muted, fontSize: 11 }}> · retired</span> : null}
+                      </span>
+                      <span style={{ width: 48, textAlign: "right", fontFamily: mono, fontSize: 12, color: p.sales > 0 ? C.cyan : C.muted }}>{num(p.sales)}</span>
+                      <span style={{ width: 80, textAlign: "right", fontFamily: mono, fontSize: 12, color: p.revenue > 0 ? C.green : C.muted }}>{money(p.revenue)}</span>
                     </div>
                   ))}
                 </div>
@@ -415,6 +437,48 @@ export default function Home() {
           </Panel>
         )}
       </main>
+
+      <AnimatePresence>
+        {reportsOpen && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={() => { setReportsOpen(false); setOpenReport(null); }}
+            style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(3,3,6,0.7)", backdropFilter: "blur(6px)", display: "grid", placeItems: "center", padding: 20 }}>
+            <motion.div initial={{ scale: 0.96, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.96, opacity: 0 }} onClick={(e) => e.stopPropagation()}
+              style={{ width: "100%", maxWidth: 680, maxHeight: "84vh", display: "flex", flexDirection: "column", background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 16, overflow: "hidden" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: `1px solid ${C.line}` }}>
+                <div>
+                  <h2 style={{ margin: 0, fontFamily: display, fontSize: 16, fontWeight: 700 }}>Analytics reports</h2>
+                  <p style={{ margin: "3px 0 0", fontSize: 11, color: C.muted }}>Snapshots written by the analytics agents</p>
+                </div>
+                <button onClick={() => { setReportsOpen(false); setOpenReport(null); }} style={{ width: 34, height: 34, borderRadius: 8, background: C.panel, border: `1px solid ${C.line}`, color: C.muted, cursor: "pointer", fontSize: 16 }}>✕</button>
+              </div>
+              <div style={{ overflowY: "auto", padding: 12 }}>
+                {!reports && <Empty text="Loading reports…" h={120} />}
+                {reports && reports.length === 0 && <Empty text="No reports yet. They appear as the analytics agents run." h={120} />}
+                {reports && reports.map((r) => {
+                  const open = openReport === r.id;
+                  return (
+                    <div key={r.id} style={{ border: `1px solid ${C.line}`, borderRadius: 10, marginBottom: 8, overflow: "hidden" }}>
+                      <button onClick={() => setOpenReport(open ? null : r.id)} style={{ width: "100%", textAlign: "left", padding: "12px 14px", background: open ? C.panel : "transparent", border: "none", cursor: "pointer", display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 13.5, color: C.ink }}>{r.title}</div>
+                          {r.summary && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: open ? "normal" : "nowrap" }}>{r.summary}</div>}
+                        </div>
+                        <span style={{ fontFamily: mono, fontSize: 10, color: C.muted, flexShrink: 0 }}>{timeAgo(r.created_at)} ago</span>
+                      </button>
+                      {open && r.data && (
+                        <pre style={{ margin: 0, padding: 14, borderTop: `1px solid ${C.line}`, background: "#0A0A12", fontFamily: mono, fontSize: 11, color: "#AEB4C7", overflowX: "auto", maxHeight: 280 }}>
+                          {JSON.stringify(r.data, null, 2)}
+                        </pre>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <style>{`@media (max-width: 880px) { .nx-2col { grid-template-columns: 1fr !important; } }`}</style>
     </div>

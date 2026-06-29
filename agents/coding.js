@@ -30,7 +30,7 @@ import {
  * future generations.
  */
 
-const CORE_AGENTS = new Set(["ceo", "marketing", "tech", "product", "sales", "finance", "analytics", "coding"]);
+const CORE_AGENTS = new Set(["ceo", "marketing", "tech", "product", "sales", "finance", "analytics", "coding", "prospector", "viability"]);
 const ALLOWED_IMPORTS = {
   "../lib/llm.js": new Set(["chat"]),
   "../lib/db.js": new Set(["logAction", "updateAgentStatus", "getStatus"]),
