@@ -34,16 +34,16 @@ export async function POST() {
         const filePath = item.file_path;
         const content = Buffer.from(item.code).toString("base64");
 
-        // Check if file already exists on GitHub
+        // Check if file exists
         let sha = null;
         try {
           const existingRes = await fetch(
             `${GITHUB_API}/repos/${GITHUB_REPO}/contents/${filePath}`,
             {
               headers: {
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "application/json",
+                Authorization: `token ${token}`,
                 Accept: "application/vnd.github.v3+json",
+                "User-Agent": "NexAI-Coding-Agent",
               },
             }
           );
@@ -53,9 +53,9 @@ export async function POST() {
           }
         } catch {}
 
-        // Create or update file via GitHub API
+        // Create or update file
         const body = {
-          message: `Coding Agent: ${sha ? "Update" : "Create"} ${filePath} [agent: ${item.agent_key}]`,
+          message: `Coding Agent: ${sha ? "Update" : "Create"} ${filePath}`,
           content,
           ...(sha ? { sha } : {}),
         };
@@ -65,16 +65,16 @@ export async function POST() {
           {
             method: "PUT",
             headers: {
-              Authorization: `Bearer ${token}`,
+              Authorization: `token ${token}`,
               "Content-Type": "application/json",
               Accept: "application/vnd.github.v3+json",
+              "User-Agent": "NexAI-Coding-Agent",
             },
             body: JSON.stringify(body),
           }
         );
 
         if (res.ok) {
-          // Mark as deployed
           await pool.query(
             "UPDATE agent_code SET status = 'deployed', deployed_at = NOW() WHERE id = $1",
             [item.id]
@@ -82,8 +82,8 @@ export async function POST() {
           deployed++;
           results.push({ file: filePath, status: "deployed" });
         } else {
-          const err = await res.text();
-          results.push({ file: filePath, status: "failed", error: err });
+          const errText = await res.text();
+          results.push({ file: filePath, status: "failed", error: errText.substring(0, 200) });
         }
       } catch (err) {
         results.push({ file: item.file_path, status: "failed", error: err.message });
