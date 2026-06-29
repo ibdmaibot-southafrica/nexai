@@ -302,6 +302,8 @@ export default function Home() {
 
   const lastEvent = logs[0];
   const alive = lastEvent && (Date.now() - new Date(lastEvent.created_at).getTime()) < 20 * 60 * 1000;
+  // Free LLM daily cap hit recently? (treated as a pause, not an error.)
+  const throttledRecently = logs.some((l) => l.action === "throttled" && (Date.now() - new Date(l.created_at).getTime()) < 60 * 60 * 1000);
 
   const agentBars = agents.slice(0, 8).map((ag) => {
     const da = a?.agents?.find((x) => x.key === ag.key);
@@ -404,6 +406,7 @@ export default function Home() {
       <main style={{ maxWidth: maxW, margin: "0 auto", padding: "26px 24px" }}>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 22, fontFamily: mono, fontSize: 11 }}>
           <StatusPill color={alive ? C.green : C.amber} label={`Last event ${timeAgo(lastEvent?.created_at)} ago`} pulse={alive} />
+          {throttledRecently && <StatusPill color={C.amber} label="LLM daily limit reached — paused, resumes on reset" />}
           <StatusPill color={C.cyan} label={`${onlineCount}/${agents.length} agents online`} />
           <StatusPill color={activeDeploy ? C.cyan : pendingBuild ? C.amber : C.green} label={activeDeploy ? `Deploying ${activeDeploy.branch}` : pendingBuild ? `${pendingBuild} build queued` : "Code synced"} pulse={!!activeDeploy} />
           <StatusPill color={C.violet} label={`${num(a?.pipeline?.total || 0)} products tracked`} />
