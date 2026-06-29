@@ -1,25 +1,26 @@
-﻿import { getState, updateState, logAgentAction } from "../../../lib/db.js";
+﻿import { getInvoices, addInvoice, logAction } from "../../../lib/db.js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // GET /api/invoices — list all invoices
 export async function GET() {
-  const state = getState();
-  let invoices = state.invoices || [];
-  if (!Array.isArray(invoices)) {
-    invoices = Object.values(invoices);
-  }
+  try {
+    const invoices = await getInvoices();
+    const invList = Array.isArray(invoices) ? invoices : Object.values(invoices);
 
-  return Response.json({
-    invoices,
-    total: invoices.length,
-    paid: invoices.filter((i) => i.status === "paid").length,
-    pending: invoices.filter((i) => i.status === "pending").length,
-    overdue: invoices.filter((i) => i.status === "overdue").length,
-    totalAmount: invoices.reduce((sum, i) => sum + (i.amount || 0), 0),
-    paidAmount: invoices.filter((i) => i.status === "paid").reduce((sum, i) => sum + (i.amount || 0), 0),
-  });
+    return Response.json({
+      invoices: invList,
+      total: invList.length,
+      paid: invList.filter((i) => i.status === "paid").length,
+      pending: invList.filter((i) => i.status === "pending").length,
+      overdue: invList.filter((i) => i.status === "overdue").length,
+      totalAmount: invList.reduce((sum, i) => sum + (i.amount || 0), 0),
+      paidAmount: invList.filter((i) => i.status === "paid").reduce((sum, i) => sum + (i.amount || 0), 0),
+    });
+  } catch (error) {
+    return Response.json({ error: error.message }, { status: 500 });
+  }
 }
 
 // POST /api/invoices — create a new invoice
@@ -41,7 +42,7 @@ export async function POST(request) {
       product,
       amount: parseFloat(amount),
       status: "pending",
-      createdAt: new Date().toISOString(),
+      created_at: new Date().toISOString(),
       dueDate: dueDate || new Date(Date.now() + 30 * 86400000).toISOString(),
       paymentInstructions: [
         "Transfer the amount to our bank account",
@@ -51,13 +52,8 @@ export async function POST(request) {
       ],
     };
 
-    updateState((state) => {
-      if (!state.invoices) state.invoices = [];
-      state.invoices.push(invoice);
-      return state;
-    });
-
-    logAgentAction("Finance", "invoice_created", { invoice });
+    await addInvoice(invoice);
+    await logAction("Finance", "invoice_created", { invoiceId: invoice.id, customer, amount });
 
     return Response.json({ success: true, invoice }, { status: 201 });
   } catch (error) {

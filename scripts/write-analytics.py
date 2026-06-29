@@ -1,4 +1,5 @@
-import { chat } from "../lib/llm.js";
+#!/usr/bin/env python3
+content = r'''import { chat } from "../lib/llm.js";
 import { logAction, updateAgentStatus, getStatus, generateReport, getAnalytics } from "../lib/db.js";
 
 export async function runAnalyticsCycle() {
@@ -81,3 +82,8 @@ export async function runAnalyticsCycle() {
     return { agent: "Analytics", action: "error", error: err.message };
   }
 }
+''';
+
+with open('agents/analytics.js', 'w', encoding='utf-8') as f:
+    f.write(content)
+print('analytics.js updated')

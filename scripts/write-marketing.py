@@ -1,4 +1,7 @@
-import { chat } from "../lib/llm.js";
+#!/usr/bin/env python3
+import os
+
+content = r'''import { chat } from "../lib/llm.js";
 import { logAction, updateAgentStatus, getStatus, addPipelineItem } from "../lib/db.js";
 
 export async function runMarketingCycle() {
@@ -79,3 +82,9 @@ JSON: {"market_gap": "...", "product_idea": "...", "target_audience": "...", "pr
     return { agent: "Marketing", action: "error", error: err.message };
   }
 }
+'''
+
+os.makedirs('agents', exist_ok=True)
+with open('agents/marketing.js', 'w', encoding='utf-8') as f:
+    f.write(content)
+print('agents/marketing.js written - Marketing now researches market gaps')
