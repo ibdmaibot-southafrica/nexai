@@ -189,6 +189,7 @@ export default function Home() {
   const [logs, setLogs] = useState([]);
   const [deploy, setDeploy] = useState(null);
   const [invoices, setInvoices] = useState([]);
+  const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -240,16 +241,18 @@ export default function Home() {
   }, []);
   const fetchFast = useCallback(async () => {
     try {
-      const [sr, lr, dr, ir] = await Promise.all([
+      const [sr, lr, dr, ir, gr] = await Promise.all([
         fetch("/api/status"),
         fetch("/api/logs?count=40"),
         fetch("/api/agents/deploy").catch(() => null),
         fetch("/api/invoices").catch(() => null),
+        fetch("/api/leads").catch(() => null),
       ]);
       if (sr?.ok) setStatus(await sr.json());
       if (lr?.ok) { const d = await lr.json(); setLogs(Array.isArray(d) ? d : d.logs || []); }
       if (dr?.ok) setDeploy(await dr.json());
       if (ir?.ok) { const d = await ir.json(); setInvoices(Array.isArray(d) ? d : d.invoices || []); }
+      if (gr?.ok) { const d = await gr.json(); setLeads(d.leads || []); }
     } catch {}
   }, []);
 
@@ -515,7 +518,22 @@ export default function Home() {
           </Panel>
         </div>
 
-        <div style={{ marginTop: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 16 }} className="nx-2col">
+          <Panel title="Discovery leads" hint="AI venues where the Prospector is listing the catalog">
+            {leads.length === 0
+              ? <Empty text="No discovery targets yet. The Prospector adds AI registries and marketplaces as it runs." h={90} />
+              : (
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  {leads.slice(0, 12).map((l, i) => (
+                    <div key={l.id || i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 2px", borderBottom: `1px solid ${C.line}` }}>
+                      <span title={l.listing || l.name} style={{ flex: 1, minWidth: 0, fontSize: 13, color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.name}</span>
+                      <span style={{ fontFamily: mono, fontSize: 10.5, color: C.muted, flexShrink: 0 }}>{l.type || "venue"}</span>
+                      <span style={{ fontFamily: mono, fontSize: 10.5, color: C.cyan, width: 78, textAlign: "right", textTransform: "uppercase" }}>{l.status}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+          </Panel>
           <Panel title="Outstanding invoices" hint={`${invoices.filter((i) => i.status === "pending").length} unpaid · ${invoices.length} total`}>
             {invoices.filter((i) => i.status === "pending").length === 0
               ? <Empty text="No outstanding invoices. Everything's settled." h={90} />
