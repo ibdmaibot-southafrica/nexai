@@ -1,5 +1,5 @@
 import { chat } from "../lib/llm.js";
-import { logAction, updateAgentStatus, getProducts, addProduct } from "../lib/db.js";
+import { logAction, updateAgentStatus, getProducts, addProduct, getSetting } from "../lib/db.js";
 
 // The Product agent invents AI-CONSUMABLE service products: hosted APIs that an
 // autonomous AI agent can discover, pay for in credits, and call. Each product is
@@ -32,7 +32,7 @@ Invent ONE NEW service not already in this list: ${[...existingNames].join("; ")
 
 Respond ONLY as JSON:
 {"name":"short name","description":"one sentence on what an agent gets","category":"extraction|analysis|monitoring|generation","tool":"web_fetch" or null,"pricePerCall":0.05,"inputHint":"what the calling agent sends (a URL if web_fetch)","systemPrompt":"full system prompt that turns the provided live content + input into concise, machine-parseable output."}`,
-      "Invent the single most useful new AI-callable micro-service with a real data moat.",
+      (await getSetting("assignment:product", "")) || "Invent the single most useful new AI-callable micro-service with a real data moat.",
       { temperature: 0.9 }
     );
 

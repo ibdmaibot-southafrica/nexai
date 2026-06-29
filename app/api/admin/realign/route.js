@@ -25,13 +25,15 @@ export async function POST(request) {
   const keep = Array.isArray(body.keep) && body.keep.length ? body.keep : KEEP;
 
   try {
-    // 1. Prune: disable every agent not in the lean keep-list.
-    const disabled = await pool.query(
-      "UPDATE agents SET status = 'disabled', updated_at = NOW() WHERE key <> ALL($1::text[]) AND status <> 'disabled' RETURNING key",
-      [keep]
-    );
+    // 1. Prune: DELETE (fire) every agent not in the lean keep-list, plus their
+    //    generated code. Hard removal, not just disabling.
+    const removed = await pool.query("DELETE FROM agents WHERE key <> ALL($1::text[]) RETURNING key", [keep]);
+    const firedKeys = removed.rows.map((r) => r.key);
+    if (firedKeys.length) {
+      try { await pool.query("DELETE FROM agent_code WHERE agent_key <> ALL($1::text[])", [keep]); } catch {}
+    }
     // Make sure the keepers are active.
-    await pool.query("UPDATE agents SET status = 'active' WHERE key = ANY($1::text[]) AND status = 'disabled'", [keep]);
+    await pool.query("UPDATE agents SET status = 'active' WHERE key = ANY($1::text[])", [keep]);
 
     // 2. Seed starter products if the live catalog is empty.
     let seeded = 0;
@@ -46,7 +48,8 @@ export async function POST(request) {
     return Response.json({
       success: true,
       kept: keep,
-      agentsDisabled: disabled.rowCount,
+      agentsFired: firedKeys.length,
+      firedKeys,
       productsSeeded: seeded,
     });
   } catch (error) {

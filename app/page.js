@@ -188,6 +188,7 @@ export default function Home() {
   const [status, setStatus] = useState(null);
   const [logs, setLogs] = useState([]);
   const [deploy, setDeploy] = useState(null);
+  const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -221,6 +222,9 @@ export default function Home() {
       const d = await r.json();
       setChatMsgs((m) => [...m, { role: "ceo", text: d.reply || d.error || "(no response)" }]);
       if (d.directive) setDirective(d.directive);
+      // Activate a CEO run so it acts on the new direction immediately (don't block the chat).
+      setChatMsgs((m) => [...m, { role: "ceo", text: "Running a CEO cycle now to act on this." }]);
+      fetch("/api/agent/ceo", { method: "POST" }).then(() => Promise.all([fetchFast(), fetchSlow()])).catch(() => {});
     } catch { setChatMsgs((m) => [...m, { role: "ceo", text: "Connection issue. Try again." }]); }
     setChatSending(false);
   };
@@ -236,14 +240,16 @@ export default function Home() {
   }, []);
   const fetchFast = useCallback(async () => {
     try {
-      const [sr, lr, dr] = await Promise.all([
+      const [sr, lr, dr, ir] = await Promise.all([
         fetch("/api/status"),
         fetch("/api/logs?count=40"),
         fetch("/api/agents/deploy").catch(() => null),
+        fetch("/api/invoices").catch(() => null),
       ]);
       if (sr?.ok) setStatus(await sr.json());
       if (lr?.ok) { const d = await lr.json(); setLogs(Array.isArray(d) ? d : d.logs || []); }
       if (dr?.ok) setDeploy(await dr.json());
+      if (ir?.ok) { const d = await ir.json(); setInvoices(Array.isArray(d) ? d : d.invoices || []); }
     } catch {}
   }, []);
 
@@ -386,7 +392,7 @@ export default function Home() {
             </button>
             <button onClick={runCycle} disabled={running}
               style={{ padding: "9px 16px", borderRadius: 10, border: "none", cursor: running ? "wait" : "pointer", fontFamily: display, fontWeight: 600, fontSize: 13, color: "#06121A", background: `linear-gradient(135deg, ${C.cyan}, ${C.violet})`, opacity: running ? 0.7 : 1 }}>
-              {running ? "Running…" : "Run cycle"}
+              {running ? "Working…" : "CEO Action"}
             </button>
           </div>
         </div>
@@ -502,6 +508,31 @@ export default function Home() {
                       </span>
                       <span style={{ width: 48, textAlign: "right", fontFamily: mono, fontSize: 12, color: p.sales > 0 ? C.cyan : C.muted }}>{num(p.sales)}</span>
                       <span style={{ width: 80, textAlign: "right", fontFamily: mono, fontSize: 12, color: p.revenue > 0 ? C.green : C.muted }}>{money(p.revenue)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+          </Panel>
+        </div>
+
+        <div style={{ marginTop: 16 }}>
+          <Panel title="Outstanding invoices" hint={`${invoices.filter((i) => i.status === "pending").length} unpaid · ${invoices.length} total`}>
+            {invoices.filter((i) => i.status === "pending").length === 0
+              ? <Empty text="No outstanding invoices. Everything's settled." h={90} />
+              : (
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <div style={{ display: "flex", gap: 10, padding: "0 2px 8px", fontFamily: mono, fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 0.5, borderBottom: `1px solid ${C.line}` }}>
+                    <span style={{ flex: 1 }}>Customer / item</span>
+                    <span style={{ width: 90, textAlign: "right" }}>Amount</span>
+                    <span style={{ width: 50, textAlign: "right" }}>Age</span>
+                  </div>
+                  {invoices.filter((i) => i.status === "pending").slice(0, 12).map((inv, i) => (
+                    <div key={inv.id || i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 2px", borderBottom: `1px solid ${C.line}` }}>
+                      <span title={`${inv.customer} — ${inv.product}`} style={{ flex: 1, minWidth: 0, fontSize: 13, color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {inv.customer}<span style={{ color: C.muted }}> · {inv.product}</span>
+                      </span>
+                      <span style={{ width: 90, textAlign: "right", fontFamily: mono, fontSize: 12, color: C.amber }}>{money(inv.amount)}</span>
+                      <span style={{ width: 50, textAlign: "right", fontFamily: mono, fontSize: 10.5, color: C.muted }}>{timeAgo(inv.created_at)}</span>
                     </div>
                   ))}
                 </div>

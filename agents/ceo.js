@@ -1,5 +1,5 @@
 import { chat } from "../lib/llm.js";
-import { logAction, updateAgentStatus, getStatus, updateState, addPipelineItem, updatePipelineItem, addAgent, removeAgent, updateAgentConfig, getPool, getSetting } from "../lib/db.js";
+import { logAction, updateAgentStatus, getStatus, updateState, addPipelineItem, updatePipelineItem, addAgent, removeAgent, updateAgentConfig, getPool, getSetting, setSetting } from "../lib/db.js";
 import { isValidAgentKey } from "./coding.js";
 
 export async function runCEOCycle() {
@@ -26,7 +26,7 @@ export async function runCEOCycle() {
 
 ${directive ? `OWNER DIRECTIVE (highest priority — follow this above all else):\n"${directive}"\n` : ""}
 CURRENT COMPANY STATE:
-- Agents: ${status.agents.map(a => `${a.name} (${a.status})`).join(", ")}
+- Agents (use the KEY in brackets for create/remove/modify/dispatch, NOT the name): ${status.agents.map(a => `${a.name} [${a.key}] (${a.status})`).join(", ")}
 - Pipeline: ${status.pipeline.length} items (${status.pipeline.filter(p=>p.status==="launched").length} launched, ${status.pipeline.filter(p=>p.status==="validated").length} validated, ${status.pipeline.filter(p=>p.status==="building").length} building, ${status.pipeline.filter(p=>p.status==="ideation").length} ideation)
 - Revenue: $${status.financials?.revenue || 0}
 - Pending invoices: ${status.invoices?.pending || 0}
@@ -67,8 +67,11 @@ Respond with a JSON object:
   },
   "launch_decisions": ["pipeline_id_1", "pipeline_id_2"],
   "financial_decision": "What to do about pricing, invoices, revenue",
-  "revenue_tactic": "Specific action to drive revenue this cycle"
-}`;
+  "revenue_tactic": "Specific action to drive revenue this cycle",
+  "dispatch": [{"agent": "product", "task": "specific instruction for this agent THIS cycle"}]
+}
+
+For "dispatch": pick ONLY the agents that actually need to work this cycle (1-4 of them) and give each a precise task. Do NOT dispatch agents with nothing useful to do — that wastes work. Available agent keys: ${status.agents.filter(a => a.key !== "ceo" && a.status === "active").map(a => a.key).join(", ")}.`;
 
     const auditResponse = await chat(
       "You are the CEO of NexAI. You have full autonomous authority over the company. Make bold decisions. Your goal is to generate real revenue through PayPal payments. Think about what products AI companies and businesses will actually pay for.",
@@ -82,6 +85,23 @@ Respond with a JSON object:
       if (m) audit = JSON.parse(m[0]);
     } catch {
       audit = null;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // DISPATCH: the CEO decides which agents run this cycle and what they do.
+    // The runner reads ceo_dispatch and runs exactly these (see agents-runner).
+    // ═══════════════════════════════════════════════════════════
+    if (Array.isArray(audit?.dispatch)) {
+      const assignments = audit.dispatch
+        .filter((d) => d && isValidAgentKey(d.agent) && d.agent !== "ceo")
+        .slice(0, 4)
+        .map((d) => ({ agent: d.agent, task: (d.task || "").toString().slice(0, 300) }));
+      if (assignments.length) {
+        await setSetting("ceo_dispatch", JSON.stringify({ ts: new Date().toISOString(), assignments }));
+        for (const a of assignments) await setSetting(`assignment:${a.agent}`, a.task);
+        decisions.dispatched = assignments.map((a) => a.agent);
+        await logAction("CEO", "dispatched_agents", { assignments });
+      }
     }
 
     // ═══════════════════════════════════════════════════════════
