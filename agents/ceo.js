@@ -85,11 +85,20 @@ Respond with a JSON object:
     // ═══════════════════════════════════════════════════════════
 
     if (audit?.agent_changes) {
-      // Create new agents
+      // Create new agents — but cap the roster. A free LLM can't run dozens of
+      // agents; over-hiring just exhausts the daily quota. Once we're at the cap,
+      // the CEO must consolidate (fire/modify) instead of hiring.
+      const ROSTER_CAP = 10;
+      let activeCount = (status.agents || []).filter((a) => a.status === "active" || a.status === "running").length;
       if (audit.agent_changes.create && Array.isArray(audit.agent_changes.create)) {
         for (const newAgent of audit.agent_changes.create) {
+          if (activeCount >= ROSTER_CAP) {
+            await logAction("CEO", "hiring_frozen", { reason: `roster at cap (${ROSTER_CAP}) — consolidate instead`, skipped: newAgent.key });
+            break;
+          }
           if (newAgent.key && newAgent.key !== "ceo" && isValidAgentKey(newAgent.key)) {
             await addAgent(newAgent.key, newAgent.name || newAgent.key, newAgent.description || "");
+            activeCount++;
             decisions[`agent_created_${newAgent.key}`] = newAgent.name;
             await logAction("CEO", "agent_created", { key: newAgent.key, name: newAgent.name, reason: newAgent.description });
           }
