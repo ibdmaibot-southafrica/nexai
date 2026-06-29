@@ -23,17 +23,23 @@ export async function POST(request) {
   let body = {};
   try { body = await request.json(); } catch {}
   const keep = Array.isArray(body.keep) && body.keep.length ? body.keep : KEEP;
+  // Default behaviour: just delete the disabled zombie agents, leaving the CEO's
+  // active roster intact. Pass { hard: true } to also fire everything not in `keep`.
+  const hard = body.hard === true;
 
   try {
-    // 1. Prune: DELETE (fire) every agent not in the lean keep-list, plus their
-    //    generated code. Hard removal, not just disabling.
-    const removed = await pool.query("DELETE FROM agents WHERE key <> ALL($1::text[]) RETURNING key", [keep]);
-    const firedKeys = removed.rows.map((r) => r.key);
-    if (firedKeys.length) {
+    let removed;
+    if (hard) {
+      removed = await pool.query("DELETE FROM agents WHERE key <> ALL($1::text[]) RETURNING key", [keep]);
       try { await pool.query("DELETE FROM agent_code WHERE agent_key <> ALL($1::text[])", [keep]); } catch {}
+      await pool.query("UPDATE agents SET status = 'active' WHERE key = ANY($1::text[])", [keep]);
+    } else {
+      // Purge benched zombies only (status disabled).
+      removed = await pool.query("DELETE FROM agents WHERE status = 'disabled' RETURNING key", []);
+      const keys = removed.rows.map((r) => r.key);
+      if (keys.length) { try { await pool.query("DELETE FROM agent_code WHERE agent_key = ANY($1::text[])", [keys]); } catch {} }
     }
-    // Make sure the keepers are active.
-    await pool.query("UPDATE agents SET status = 'active' WHERE key = ANY($1::text[])", [keep]);
+    const firedKeys = removed.rows.map((r) => r.key);
 
     // 2. Seed starter products if the live catalog is empty.
     let seeded = 0;
