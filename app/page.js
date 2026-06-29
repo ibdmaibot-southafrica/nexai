@@ -766,7 +766,7 @@ export default function Home() {
                 </button>
                 <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={handleRunAllAgents} disabled={runningAgents.size > 0} className="btn-success btn-sm">
                   {runningAgents.size > 0 ? <Loader2 size={14} className="spin" /> : <Zap size={14} />}
-                  Run All 7
+                  Run All {AGENTS_CONFIG.length}
                 </motion.button>
               </div>
 

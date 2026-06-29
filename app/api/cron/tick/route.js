@@ -13,6 +13,7 @@ const CORE_AGENTS = [
   { key: "tech", fn: "runTechCycle", file: "tech.js" },
   { key: "product", fn: "runProductCycle", file: "product.js" },
   { key: "sales", fn: "runSalesCycle", file: "sales.js" },
+  { key: "invoice", fn: "runInvoiceCycle", file: "invoice.js" },
   { key: "finance", fn: "runFinanceCycle", file: "finance.js" },
   { key: "analytics", fn: "runAnalyticsCycle", file: "analytics.js" },
 ];
