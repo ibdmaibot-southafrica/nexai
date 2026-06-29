@@ -1,5 +1,5 @@
 import { chat } from "../lib/llm.js";
-import { logAction, updateAgentStatus, getStatus, updateState, addPipelineItem, updatePipelineItem, addAgent, removeAgent, updateAgentConfig, getPool } from "../lib/db.js";
+import { logAction, updateAgentStatus, getStatus, updateState, addPipelineItem, updatePipelineItem, addAgent, removeAgent, updateAgentConfig, getPool, getSetting } from "../lib/db.js";
 import { isValidAgentKey } from "./coding.js";
 
 export async function runCEOCycle() {
@@ -9,11 +9,14 @@ export async function runCEOCycle() {
 
   try {
     const status = await getStatus();
+    // The owner's standing direction (set via the "Talk to CEO" chat). This
+    // overrides the CEO's own instincts — follow it.
+    const directive = await getSetting("owner_directive", "");
 
     // ═══════════════════════════════════════════════════════════
     // PHASE 1: FULL COMPANY AUDIT & STRATEGIC DECISIONS
     // ═══════════════════════════════════════════════════════════
-    
+
     const auditPrompt = `You are the CEO of NexAI — a fully autonomous AI company. You have FULL authority to:
 - Create new agents or remove underperforming ones
 - Change any agent's role, name, or configuration
@@ -21,6 +24,7 @@ export async function runCEOCycle() {
 - Set company strategy and financial direction
 - Make decisions that directly impact revenue
 
+${directive ? `OWNER DIRECTIVE (highest priority — follow this above all else):\n"${directive}"\n` : ""}
 CURRENT COMPANY STATE:
 - Agents: ${status.agents.map(a => `${a.name} (${a.status})`).join(", ")}
 - Pipeline: ${status.pipeline.length} items (${status.pipeline.filter(p=>p.status==="launched").length} launched, ${status.pipeline.filter(p=>p.status==="validated").length} validated, ${status.pipeline.filter(p=>p.status==="building").length} building, ${status.pipeline.filter(p=>p.status==="ideation").length} ideation)

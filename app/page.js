@@ -201,6 +201,30 @@ export default function Home() {
     try { const r = await fetch("/api/reports?limit=25"); if (r.ok) { const d = await r.json(); setReports(d.reports || []); } } catch {}
   };
 
+  // Talk to CEO
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMsgs, setChatMsgs] = useState([{ role: "ceo", text: "I'm the CEO. Tell me how you want the company steered — products, focus, pricing, agents — and I'll set our standing direction." }]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatSending, setChatSending] = useState(false);
+  const [directive, setDirective] = useState("");
+  const openChat = async () => {
+    setChatOpen(true);
+    try { const r = await fetch("/api/ceo/chat"); if (r.ok) setDirective((await r.json()).directive || ""); } catch {}
+  };
+  const sendCeo = async () => {
+    const msg = chatInput.trim();
+    if (!msg || chatSending) return;
+    setChatMsgs((m) => [...m, { role: "owner", text: msg }]);
+    setChatInput(""); setChatSending(true);
+    try {
+      const r = await fetch("/api/ceo/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: msg }) });
+      const d = await r.json();
+      setChatMsgs((m) => [...m, { role: "ceo", text: d.reply || d.error || "(no response)" }]);
+      if (d.directive) setDirective(d.directive);
+    } catch { setChatMsgs((m) => [...m, { role: "ceo", text: "Connection issue. Try again." }]); }
+    setChatSending(false);
+  };
+
   useEffect(() => { setLastSeen(Number(localStorage.getItem("nexai_last_seen") || 0)); }, []);
 
   const fetchSlow = useCallback(async () => {
@@ -352,6 +376,10 @@ export default function Home() {
                 )}
               </AnimatePresence>
             </div>
+            <button onClick={openChat}
+              style={{ padding: "9px 16px", borderRadius: 10, cursor: "pointer", fontFamily: display, fontWeight: 600, fontSize: 13, color: "#06121A", background: C.green, border: "none" }}>
+              Talk to CEO
+            </button>
             <button onClick={loadReports}
               style={{ padding: "9px 16px", borderRadius: 10, cursor: "pointer", fontFamily: display, fontWeight: 600, fontSize: 13, color: C.ink, background: C.panel, border: `1px solid ${C.line}` }}>
               Reports
@@ -546,6 +574,54 @@ export default function Home() {
                     </div>
                   );
                 })}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {chatOpen && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setChatOpen(false)}
+            style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(3,3,6,0.7)", backdropFilter: "blur(6px)", display: "grid", placeItems: "center", padding: 20 }}>
+            <motion.div initial={{ scale: 0.96, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.96, opacity: 0 }} onClick={(e) => e.stopPropagation()}
+              style={{ width: "100%", maxWidth: 560, height: "80vh", maxHeight: 640, display: "flex", flexDirection: "column", background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 16, overflow: "hidden" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: `1px solid ${C.line}` }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ width: 9, height: 9, borderRadius: "50%", background: C.green }} />
+                  <div>
+                    <h2 style={{ margin: 0, fontFamily: display, fontSize: 16, fontWeight: 700 }}>CEO Agent</h2>
+                    <p style={{ margin: "2px 0 0", fontSize: 11, color: C.muted }}>Give direction. It steers every cycle.</p>
+                  </div>
+                </div>
+                <button onClick={() => setChatOpen(false)} style={{ width: 34, height: 34, borderRadius: 8, background: C.panel, border: `1px solid ${C.line}`, color: C.muted, cursor: "pointer", fontSize: 16 }}>✕</button>
+              </div>
+
+              {directive && (
+                <div style={{ margin: "12px 16px 0", padding: "10px 12px", borderRadius: 10, background: "rgba(52,211,153,0.07)", border: `1px solid rgba(52,211,153,0.25)` }}>
+                  <div style={{ fontFamily: mono, fontSize: 9.5, letterSpacing: 0.6, color: C.green, textTransform: "uppercase", marginBottom: 4 }}>Standing directive (in effect)</div>
+                  <div style={{ fontSize: 12.5, color: "#C3C7D6", lineHeight: 1.45 }}>{directive}</div>
+                </div>
+              )}
+
+              <div style={{ flex: 1, overflowY: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
+                {chatMsgs.map((m, i) => (
+                  <div key={i} style={{ alignSelf: m.role === "owner" ? "flex-end" : "flex-start", maxWidth: "85%", padding: "10px 13px", borderRadius: 12, fontSize: 13, lineHeight: 1.5,
+                    background: m.role === "owner" ? `linear-gradient(135deg, ${C.cyan}, ${C.violet})` : C.panel,
+                    color: m.role === "owner" ? "#06121A" : C.ink, border: m.role === "owner" ? "none" : `1px solid ${C.line}`, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                    {m.text}
+                  </div>
+                ))}
+                {chatSending && <div style={{ alignSelf: "flex-start", fontFamily: mono, fontSize: 11, color: C.muted }}>CEO is thinking…</div>}
+              </div>
+
+              <div style={{ display: "flex", gap: 8, padding: 14, borderTop: `1px solid ${C.line}` }}>
+                <input value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && sendCeo()} placeholder="Tell the CEO what to do…"
+                  style={{ flex: 1, padding: "11px 14px", borderRadius: 10, background: C.panel, border: `1px solid ${C.line}`, color: C.ink, fontSize: 13, outline: "none" }} />
+                <button onClick={sendCeo} disabled={chatSending || !chatInput.trim()}
+                  style={{ padding: "0 18px", borderRadius: 10, border: "none", background: `linear-gradient(135deg, ${C.cyan}, ${C.violet})`, color: "#06121A", fontFamily: display, fontWeight: 700, fontSize: 13, cursor: chatSending ? "wait" : "pointer", opacity: chatInput.trim() ? 1 : 0.5 }}>
+                  Send
+                </button>
               </div>
             </motion.div>
           </motion.div>
