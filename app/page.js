@@ -237,6 +237,14 @@ export default function Home() {
     setRunning(false);
   };
 
+  const [runningAgent, setRunningAgent] = useState(null);
+  const runAgent = async (key) => {
+    if (runningAgent) return;
+    setRunningAgent(key);
+    try { await fetch(`/api/agent/${key}`, { method: "POST" }); await Promise.all([fetchFast(), fetchSlow()]); } catch {}
+    setRunningAgent(null);
+  };
+
   const fin = a?.financials || {};
   const agents = status?.agents || a?.agents || [];
   const onlineCount = agents.filter((x) => x.status === "active" || x.status === "running").length;
@@ -265,17 +273,22 @@ export default function Home() {
   const NOTE = /sale|fund|paid|purchase|launch|discontinu|merged|build_started|build_failed|agent_created|agent_removed|hiring|repair|throttled|error|reject|product_/i;
   const notifs = [];
   for (const i of (ins?.insights || [])) {
-    notifs.push({ tone: i.priority === "high" ? C.amber : i.priority === "medium" ? C.cyan : C.muted, title: i.title, body: i.content, ts: i.created_at || ins.timestamp });
+    // Only DB insights have a stable created_at; live/computed ones get refreshed
+    // every poll, so they must NOT count toward "unread" (or the badge never clears).
+    notifs.push({ tone: i.priority === "high" ? C.amber : i.priority === "medium" ? C.cyan : C.muted, title: i.title, body: i.content, ts: i.created_at || null, countable: !!i.created_at });
   }
   for (const l of logs.slice(0, 40)) {
     if (!NOTE.test(l.action || "")) continue;
-    notifs.push({ tone: logTone(l.action), title: `${l.agent}: ${humanize(l.action)}`, body: l.details ? String(l.details).replace(/[{}"]/g, "") : "", ts: l.created_at });
+    notifs.push({ tone: logTone(l.action), title: `${l.agent}: ${humanize(l.action)}`, body: l.details ? String(l.details).replace(/[{}"]/g, "") : "", ts: l.created_at, countable: true });
   }
   notifs.sort((x, y) => new Date(y.ts || 0) - new Date(x.ts || 0));
-  const unread = notifs.filter((n) => new Date(n.ts || 0).getTime() > lastSeen).length;
+  const unread = notifs.filter((n) => n.countable && n.ts && new Date(n.ts).getTime() > lastSeen).length;
+  const markSeen = () => { const now = Date.now(); localStorage.setItem("nexai_last_seen", String(now)); setLastSeen(now); };
   const openNotifs = () => {
-    setNotifOpen((o) => !o);
-    if (!notifOpen) { const now = Date.now(); localStorage.setItem("nexai_last_seen", String(now)); setLastSeen(now); }
+    setNotifOpen((o) => {
+      if (!o) markSeen(); // opening -> clear the unread badge
+      return !o;
+    });
   };
 
   if (loading) {
@@ -380,8 +393,12 @@ export default function Home() {
                     </span>
                     <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textTransform: "capitalize" }}>{ag.name || ag.key}</span>
                     <span style={{ fontFamily: mono, fontSize: 10.5, color: agentColor(ag.status), textTransform: "uppercase", width: 62, textAlign: "right" }}>{ag.status}</span>
-                    <span style={{ fontFamily: mono, fontSize: 10.5, color: C.muted, width: 62, textAlign: "right" }}>{num(da?.tasksCompleted ?? ag.tasksCompleted ?? 0)} runs</span>
-                    <span style={{ fontFamily: mono, fontSize: 10.5, color: C.muted, width: 34, textAlign: "right" }}>{timeAgo(ag.lastRun)}</span>
+                    <span style={{ fontFamily: mono, fontSize: 10.5, color: C.muted, width: 50, textAlign: "right" }}>{num(da?.tasksCompleted ?? ag.tasksCompleted ?? 0)} runs</span>
+                    <span style={{ fontFamily: mono, fontSize: 10.5, color: C.muted, width: 30, textAlign: "right" }}>{timeAgo(ag.lastRun)}</span>
+                    <button onClick={() => runAgent(ag.key)} disabled={!!runningAgent} title={`Run ${ag.name || ag.key} now`}
+                      style={{ flexShrink: 0, padding: "3px 9px", borderRadius: 7, border: `1px solid ${C.line}`, background: runningAgent === ag.key ? C.cyan : "transparent", color: runningAgent === ag.key ? "#06121A" : C.cyan, fontFamily: mono, fontSize: 10, cursor: runningAgent ? "wait" : "pointer" }}>
+                      {runningAgent === ag.key ? "…" : "Run"}
+                    </button>
                   </div>
                 );
               })}
@@ -422,7 +439,7 @@ export default function Home() {
                   {topProducts.map((p, i) => (
                     <div key={p.id || i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 2px", borderBottom: `1px solid ${C.line}` }}>
                       <span style={{ width: 18, fontFamily: mono, fontSize: 12, color: i === 0 && p.sales > 0 ? C.amber : C.muted }}>{i + 1}</span>
-                      <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <span title={p.name} style={{ flex: 1, minWidth: 0, fontSize: 13, color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {p.name}{p.status === "retired" ? <span style={{ color: C.muted, fontSize: 11 }}> · retired</span> : null}
                       </span>
                       <span style={{ width: 48, textAlign: "right", fontFamily: mono, fontSize: 12, color: p.sales > 0 ? C.cyan : C.muted }}>{num(p.sales)}</span>
