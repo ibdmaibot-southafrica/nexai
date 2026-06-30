@@ -2,59 +2,33 @@
 import os
 
 content = r'''import { chat } from "../lib/llm.js";
-import { logAction, updateAgentStatus, getStatus, addInvoice } from "../lib/db.js";
+import { logAction, updateAgentStatus, getStatus } from "../lib/db.js";
 
-const REAL_AI_COMPANIES = [
-  { name: "Anthropic", url: "https://www.anthropic.com", location: "San Francisco, US", use_case: "AI safety research" },
-  { name: "Cohere", url: "https://cohere.com", location: "Toronto, Canada", use_case: "Enterprise NLP" },
-  { name: "Hugging Face", url: "https://huggingface.co", location: "New York, US", use_case: "ML model hosting" },
-  { name: "Scale AI", url: "https://scale.com", location: "San Francisco, US", use_case: "AI training data" },
-  { name: "Databricks", url: "https://databricks.com", location: "San Francisco, US", use_case: "ML data platform" },
-  { name: "Snowflake", url: "https://www.snowflake.com", location: "Montreal, Canada", use_case: "AI data warehousing" },
-  { name: "Perplexity", url: "https://www.perplexity.ai", location: "San Francisco, US", use_case: "AI search" },
-  { name: "Groq", url: "https://groq.com", location: "Mountain View, US", use_case: "AI inference" },
-  { name: "Mistral AI", url: "https://mistral.ai", location: "Montreal, Canada", use_case: "Open source LLMs" },
-  { name: "Coveo", url: "https://www.coveo.com", location: "Montreal, Canada", use_case: "AI enterprise search" },
-];
+// NOTE: This agent does NOT create invoices. Invoices/orders are only ever born
+// from a real checkout (POST /api/payments/create) and are auto-confirmed as
+// "paid" by the PayPal webhook (/api/payments/webhook). Pre-minting invoices
+// against real company names is fabricated revenue, so it has been removed.
+// The sales agent now only does sales research/strategy so it stays "active"
+// on the dashboard without inventing customers or sending any email.
 
 export async function runSalesCycle() {
   await updateAgentStatus("sales", "running", 0);
   try {
     const status = await getStatus();
     const launchedProducts = status.pipeline.filter(p => p.status === "launched");
-    let action = {};
+    let action = { invoicesCreated: 0 };
 
-    // Pick 3 random real companies
-    const shuffled = REAL_AI_COMPANIES.sort(() => Math.random() - 0.5);
-    const targets = shuffled.slice(0, 3);
-    action.realLeadsFound = targets.length;
-    action.topLeads = targets.map(c => c.name + " (" + c.location + ")");
+    const focus = launchedProducts[0]?.name || "the NexAI product suite";
 
-    for (const company of targets) {
-      const outreach = await chat(
-        "You are a B2B sales copywriter for NexAI.",
-        "Write outreach email for " + company.name + " (" + company.location + "). Their focus: " + company.use_case + ". JSON: {\"subject\": \"...\", \"body\": \"...\"}",
-        { temperature: 0.8 }
-      );
-      let msg = { subject: "Hi " + company.name, body: "Lets talk." };
-      try { const m = outreach.match(/\{[\s\S]*\}/); if (m) msg = JSON.parse(m[0]); } catch {}
-
-      const inv = await addInvoice({
-        customer: company.name + " (" + company.location + ")",
-        product: launchedProducts[0]?.name || "NexAI Tools",
-        amount: launchedProducts[0]?.price || 49,
-        status: "pending",
-        pipeline_item_id: company.url
-      });
-      action.invoicesCreated = (action.invoicesCreated || 0) + 1;
-      await logAction("Sales", "real_lead", { company: company.name, invoiceId: inv.id, subject: msg.subject });
-    }
-
-    if (launchedProducts.length === 0) {
-      const study = await chat("Sales expert studying.", "Best B2B sales technique for AI products? Topic + 3 insights.", { temperature: 0.7 });
-      action.selfImprovement = study.substring(0, 200);
-      await logAction("Sales", "self_study", { topic: action.selfImprovement });
-    }
+    // Self-improvement only: study how to convert real buyers. No outreach is
+    // sent, no company is contacted, and no invoice is created here.
+    const study = await chat(
+      "You are a B2B growth strategist for NexAI.",
+      "For " + focus + ", give the single highest-leverage tactic to convert real inbound buyers via a self-serve PayPal checkout. Return a short topic line + 3 concrete insights.",
+      { temperature: 0.7 }
+    );
+    action.selfImprovement = study.substring(0, 300);
+    await logAction("Sales", "self_study", { focus, topic: action.selfImprovement });
 
     await updateAgentStatus("sales", "active", 1);
     return { agent: "Sales", action: "sales_cycle", ...action };

@@ -243,58 +243,36 @@ export async function runCEOCycle() {
 # SALES AGENT - Selling + Lead Generation + Self-Improvement
 # ============================================================
 sales = r'''import { chat } from "../lib/llm.js";
-import { logAction, updateAgentStatus, getStatus, addInvoice } from "../lib/db.js";
+import { logAction, updateAgentStatus, getStatus } from "../lib/db.js";
+
+// NOTE: This agent does NOT create invoices. Invoices/orders are only ever born
+// from a real checkout (POST /api/payments/create) and are auto-confirmed as
+// "paid" by the PayPal webhook (/api/payments/webhook). Pre-minting invoices is
+// fabricated revenue, so it has been removed. The sales agent now only does
+// sales research/strategy so it stays "active" without inventing customers.
 
 export async function runSalesCycle() {
   await updateAgentStatus("sales", "running", 0);
   try {
     const status = await getStatus();
     const launchedProducts = status.pipeline.filter(p => p.status === "launched");
-    
-    let action = {};
-    
-    // WORK: Find leads and create invoices for launched products
-    if (launchedProducts.length > 0) {
-      // Research potential customers
-      const leads = await chat(
-        "You are a B2B Sales Agent for NexAI. We sell AI products to businesses in the US and Canada.",
-        "Our products: " + launchedProducts.map(p => p.name + " ($" + p.price + ")").join(", ") + ". Find 3 real business types that would buy these. JSON: [{\"business_type\": \"type\", \"pain_point\": \"why\", \"outreach_message\": \"pitch\"}]",
-        { temperature: 0.8 }
-      );
-      try {
-        const m = leads.match(/\[[\s\S]*\]/);
-        if (m) {
-          const leadList = JSON.parse(m[0]);
-          action.leadsFound = leadList.length;
-          await logAction("Sales", "leads_found", { leads: leadList.map(l => l.business_type) });
-        }
-      } catch {}
-      
-      // Create invoices for launched products
-      for (const product of launchedProducts.slice(0, 2)) {
-        const invoice = await addInvoice({
-          customer: "Prospective Customer (US/Canada)",
-          product: product.name,
-          amount: product.price || 49,
-          status: "pending",
-          pipeline_item_id: product.id
-        });
-        action.invoicesCreated = (action.invoicesCreated || 0) + 1;
-        await logAction("Sales", "invoice_sent", { product: product.name, invoiceId: invoice.id });
-      }
-    }
-    
-    // SELF-IMPROVEMENT: If nothing to sell, study sales
-    if (launchedProducts.length === 0) {
-      const study = await chat(
-        "You are a sales professional studying to improve your skills. No products are ready to sell yet.",
-        "What is the most valuable sales technique, negotiation strategy, or market insight you should learn next to sell AI products to US/Canadian businesses? Give a specific topic and 3 key insights.",
-        { temperature: 0.7 }
-      );
-      action.selfImprovement = study.substring(0, 200);
-      await logAction("Sales", "self_study", { topic: action.selfImprovement });
-    }
-    
+
+    let action = { invoicesCreated: 0 };
+
+    const focus = launchedProducts.length > 0
+      ? launchedProducts.map(p => p.name + " ($" + p.price + ")").join(", ")
+      : "the NexAI product suite";
+
+    // Self-improvement only: study how to convert real buyers. No outreach is
+    // sent, no company is contacted, and no invoice is created here.
+    const study = await chat(
+      "You are a B2B growth strategist for NexAI.",
+      "For " + focus + ", give the single highest-leverage tactic to convert real inbound buyers via a self-serve PayPal checkout. Return a short topic line + 3 concrete insights.",
+      { temperature: 0.7 }
+    );
+    action.selfImprovement = study.substring(0, 300);
+    await logAction("Sales", "self_study", { focus, topic: action.selfImprovement });
+
     await updateAgentStatus("sales", "active", 1);
     return { agent: "Sales", action: "sales_cycle", ...action };
   } catch (err) {

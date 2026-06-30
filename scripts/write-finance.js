@@ -1,6 +1,9 @@
 const fs = require('fs');
+// Finance agent: review + forecasting only. It does NOT create invoices.
+// Invoices/orders are only ever born from a real checkout (POST /api/payments/create)
+// and auto-confirmed "paid" by the PayPal webhook. No fabricated invoices.
 const content = `import { chat } from "../lib/llm.js";
-import { logAction, updateAgentStatus, getInvoices, addInvoice, getStatus } from "../lib/db.js";
+import { logAction, updateAgentStatus, getInvoices, getStatus } from "../lib/db.js";
 
 export async function runFinanceCycle() {
   await updateAgentStatus("finance", "running", 0);
@@ -20,25 +23,6 @@ export async function runFinanceCycle() {
       { temperature: 0.3 }
     );
 
-    const readyItems = status.pipeline.filter(p => p.status === "research_complete" || p.status === "built");
-    let invoiceCreated = null;
-    
-    if (readyItems.length > 0 && pendingInvoices.length < 3) {
-      const item = readyItems[0];
-      const invoice = {
-        id: \`inv-\${Date.now()}-\${Math.random().toString(36).substring(2, 6)}\`,
-        customer: "Pending Customer",
-        product: item.name,
-        amount: item.price || 49,
-        status: "pending",
-        created_at: new Date().toISOString(),
-        pipeline_item_id: item.id,
-      };
-      await addInvoice(invoice);
-      invoiceCreated = invoice.id;
-      await logAction("Finance", "auto_invoice_created", { invoiceId: invoice.id, product: item.name, amount: invoice.amount });
-    }
-
     await logAction("Finance", "review_complete", response.substring(0, 200));
     await updateAgentStatus("finance", "active", 1);
 
@@ -46,7 +30,7 @@ export async function runFinanceCycle() {
       agent: "Finance",
       action: "finance_cycle",
       strategy: response.substring(0, 200),
-      invoiceCreated,
+      invoiceCreated: null,
       pendingInvoices: pendingInvoices.length,
     };
   } catch (err) {
