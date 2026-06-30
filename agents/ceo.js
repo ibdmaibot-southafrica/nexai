@@ -24,10 +24,14 @@ export async function runCEOCycle() {
 - Set company strategy and financial direction
 - Make decisions that directly impact revenue
 
+BUSINESS MODEL — READ CAREFULLY: NexAI sells ONLY digital IP products: prompt packs, MCP server configs, agent system-prompt libraries, template kits, curated/annotated lists, and small datasets. Each is PRODUCED ONCE and DELIVERED INSTANTLY as a finished file — no build, no deploy, no hosting, no human intervention. NEVER propose SaaS, web apps, dashboards, or anything that has to be "built" or run as a service. The "product" agent is your IP factory — to create a product you brief and dispatch it; it produces the actual deliverable and puts it live.
+
 ${directive ? `OWNER DIRECTIVE (highest priority — follow this above all else):\n"${directive}"\n` : ""}
 CURRENT COMPANY STATE:
 - Agents (use the KEY in brackets for create/remove/modify/dispatch, NOT the name): ${status.agents.map(a => `${a.name} [${a.key}] (${a.status})`).join(", ")}
 - Pipeline: ${status.pipeline.length} items (${status.pipeline.filter(p=>p.status==="launched").length} launched, ${status.pipeline.filter(p=>p.status==="validated").length} validated, ${status.pipeline.filter(p=>p.status==="building").length} building, ${status.pipeline.filter(p=>p.status==="ideation").length} ideation)
+- LIVE STOREFRONT (what's actually for sale + real sales): ${(status.products || []).filter(p=>p.status==="live").length} live products${(status.products||[]).filter(p=>p.status==="live").length ? " — " + (status.products||[]).filter(p=>p.status==="live").slice(0,12).map(p=>`${p.name} ($${p.price}, ${p.sales} sales/$${p.revenue})`).join("; ") : ""}
+- Total real product sales: $${(status.products || []).reduce((s,p)=>s+(p.revenue||0),0).toFixed(2)} across ${(status.products || []).reduce((s,p)=>s+(p.sales||0),0)} orders
 - Revenue: $${status.financials?.revenue || 0}
 - Pending invoices: ${status.invoices?.pending || 0}
 - Total invoices: ${status.invoices?.total || 0}
@@ -53,12 +57,13 @@ Respond with a JSON object:
 {
   "strategy": "This cycle's company strategy (1-2 sentences)",
   "product_decision": {
-    "action": "create|skip|pivot",
+    "action": "create|skip",
+    "ip_type": "prompt-pack|mcp-config|system-prompts|template-kit|resource-list|dataset",
     "name": "Product name",
-    "description": "What it does",
-    "price": 29,
+    "brief": "Precise brief for the product agent: exactly what IP asset to produce and for whom",
+    "price": 19,
     "target_audience": "Who buys this",
-    "why": "Why this will generate revenue now"
+    "why": "Why this IP will sell now"
   },
   "agent_changes": {
     "create": [{"key": "agent_key", "name": "Agent Name", "description": "What this agent does"}],
@@ -163,17 +168,24 @@ For "dispatch": pick ONLY the agents that actually need to work this cycle (1-4 
 
     if (audit?.product_decision && audit.product_decision.action === "create") {
       const pd = audit.product_decision;
-      await addPipelineItem({
-        name: pd.name || "AI Product",
-        description: pd.description || "Autonomous AI product",
-        price: pd.price || 29,
-        category: "saas",
-        status: "ideation",
-        targetAudience: pd.target_audience || "AI companies and businesses"
-      });
+      // No SaaS pipeline, no empty placeholder products. To create a product the
+      // CEO briefs its IP factory (the product agent) and makes sure it runs this
+      // cycle — the product agent produces the finished, deliverable IP asset.
+      const brief = `${pd.brief || pd.name || "the most valuable IP asset you can ship"}${pd.ip_type ? ` [type: ${pd.ip_type}]` : ""}${pd.price ? ` [target price ~$${pd.price}]` : ""}${pd.target_audience ? ` [for: ${pd.target_audience}]` : ""}`.slice(0, 300);
+      await setSetting("assignment:product", brief);
+      // Ensure 'product' is in this cycle's dispatch so the brief is acted on now.
+      try {
+        const raw = await getSetting("ceo_dispatch", "");
+        const disp = raw ? JSON.parse(raw) : { ts: new Date().toISOString(), assignments: [] };
+        if (!disp.assignments.some((a) => a.agent === "product")) {
+          disp.assignments.unshift({ agent: "product", task: brief });
+          disp.ts = new Date().toISOString();
+          await setSetting("ceo_dispatch", JSON.stringify(disp));
+        }
+      } catch {}
       decisions.createdProduct = pd.name;
-      decisions.productPrice = pd.price;
-      await logAction("CEO", "product_decision", { name: pd.name, price: pd.price, why: pd.why });
+      decisions.productBrief = brief;
+      await logAction("CEO", "product_brief", { name: pd.name, ip_type: pd.ip_type, price: pd.price, why: pd.why });
     }
 
     // ═══════════════════════════════════════════════════════════

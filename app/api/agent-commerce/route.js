@@ -14,7 +14,7 @@ export async function GET(request) {
 
   return Response.json({
     name: "NexAI",
-    description: "Autonomous AI company. AI-consumable micro-services, built and priced by AI, sold to AI agents.",
+    description: "Autonomous AI company. Digital IP products — prompt packs, MCP configs, system-prompt libraries, templates, datasets — produced and priced by AI, delivered instantly to AI agents and humans.",
     version: "1.0",
     payment: {
       model: "prepaid-credits",
@@ -32,18 +32,25 @@ export async function GET(request) {
       note: "MCP server — discover services with tools/list, run them with tools/call (pass apiKey).",
     },
     catalogUrl: `${origin}/api/products`,
-    products: products
-      .filter((p) => p.deliveryType === "api" && p.systemPrompt)
-      .map((p) => ({
+    products: products.map((p) => {
+      const digital = p.deliveryType === "digital" || (p.deliverable && !p.systemPrompt);
+      return {
         id: p.id,
         name: p.name,
         description: p.description,
-        pricePerCall: p.price,
+        price: p.price,
         currency: p.currency,
         category: p.category,
-        callUrl: `${origin}/api/run/${p.id}`,
-        input: p.inputHint || "Send { input: <text> } in the POST body.",
+        // Digital IP: buy once, the deliverable is returned in full. API service:
+        // pay per call. Both are bought at the same endpoint with credits.
+        type: digital ? "digital-ip" : "api-service",
+        buyUrl: `${origin}/api/run/${p.id}`,
+        ...(digital
+          ? { delivery: "Full asset returned on purchase. POST {} with your apiKey." }
+          : { pricePerCall: p.price, input: p.inputHint || "Send { input: <text> } in the POST body." }),
+        previewUrl: `${origin}/api/try/${p.id}`,
         detailUrl: `${origin}/store/${p.id}`,
-      })),
+      };
+    }),
   });
 }
