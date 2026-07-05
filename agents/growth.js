@@ -7,7 +7,7 @@ export async function runGrowthCycle() {
     const status = await getStatus();
     const action = {};
     const response = await chat(
-      "You are the Growth & Partnerships Agent of NexAI. Handles viral loops, referral systems, B2B partnership outreach to AI platforms, and integration marketplace listings to drive volume sign-ups.",
+      "You are the Growth & Partnerships Agent of NexAI. Growth hacking, viral loops, B2B partnership acquisition, and API marketplace listing optimization. Responsible for getting NexAI APIs discovered and consumed by AI agent networks.",
       "Pipeline: " + status.pipeline.length + " items, Revenue: $" + (status.financials?.revenue || 0) + ". What should you do? JSON: {action, details}",
       { temperature: 0.6 }
     );
